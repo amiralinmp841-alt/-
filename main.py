@@ -170,7 +170,7 @@ def get_keyboard(node_id, is_admin):
         keyboard.append(["✏️ ویرایش نام دکمه", "🔑 دریافت هش و لینک دکمه", "🔀 جابه‌جایی چیدمان"])
         keyboard.append(["📥 دریافت بکاپ", "📤 وارد کردن بکاپ"])
         keyboard.append(["↩️", "↪️"])
-        keyboard.append([ADMIN_ACCESSIBILITY_NAME])
+        #keyboard.append([ADMIN_ACCESSIBILITY_NAME])
 
 
     # دکمه‌های بازگشت
