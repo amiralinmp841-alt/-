@@ -22,8 +22,8 @@ app = Flask(__name__)
 
 # --- CONFIGURATION ---
 # توکن و آیدی عددی ادمین از متغیرهای محیطی خوانده می‌شود
-TOKEN = os.getenv("TOKEN")
 import os
+TOKEN = os.getenv("TOKEN")
 
 # خواندن لیست ادمین‌ها از متغیر محیطی
 ADMIN_IDS = []
@@ -41,17 +41,8 @@ def home():
 
 
 def run_flask():
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
 
-#==========================================================================
-if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    # BOT MUST RUN IN MAIN THREAD
-    application = ApplicationBuilder().token(TOKEN).build()
-    application.run_polling()
 #==========================================================================
 
 def delete_node_recursive(db, node_id):
@@ -1130,9 +1121,7 @@ async def send_daily_backup(context: ContextTypes.DEFAULT_TYPE):
 def home():
     return "Bot is running!", 200
 
-# --- MAIN ---
-# --- MAIN ---
-# --- MAIN ---
+
 # --- MAIN ---
 if __name__ == "__main__":
     if not TOKEN:
@@ -1142,7 +1131,7 @@ if __name__ == "__main__":
     # ساخت اپلیکیشن ربات
     application = ApplicationBuilder().token(TOKEN).build()
 
-    # 🔔 هندلر کسانی که هنوز /start نزدن
+    # 🔔 پیام‌های بدون /start → not_started
     application.add_handler(
         MessageHandler(
             filters.TEXT & (~filters.COMMAND),
@@ -1151,7 +1140,7 @@ if __name__ == "__main__":
         group=0
     )
 
-    # ⏱ بکاپ اتوماتیک روزانه
+    # ⏱ بکاپ اتوماتیک
     application.job_queue.run_repeating(
         send_daily_backup,
         interval=8 * 60 * 60,
@@ -1184,15 +1173,13 @@ if __name__ == "__main__":
 
     application.add_handler(conv_handler, group=1)
 
-    print("Bot is running...")
+    # اجرای Flask در بک‌گراند برای uptime
+    def run_flask():
+        port = int(os.environ.get("PORT", 10000))
+        app.run(host="0.0.0.0", port=port)
 
-    # اجرای همزمان ربات + وب سرور
-    def run_bot():
-        application.run_polling()
+    threading.Thread(target=run_flask, daemon=True).start()
 
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.start()
-
-    # اجرای Flask روی پورت Render
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    # Bot در main thread
+    print("🚀 Bot is running...")
+    application.run_polling()
