@@ -1168,13 +1168,12 @@ if __name__ == "__main__":
 
     application.add_handler(conv_handler, group=1)
 
-    # اجرای Flask در بک‌گراند برای uptime
-    def run_flask():
-        port = int(os.environ.get("PORT", 10000))
-        app.run(host="0.0.0.0", port=port)
+    # ❗ خیلی مهم
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=int(os.environ.get("PORT", 10000)),
+        url_path=TOKEN,
+        webhook_url=f"https://library-render-amirali3-git1.onrender.com/{TOKEN}"
+    )
 
-    threading.Thread(target=run_flask, daemon=True).start()
 
-    # Bot در main thread
-    print("🚀 Bot is running...")
-    application.run_polling()
