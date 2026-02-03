@@ -18,7 +18,7 @@ import copy
 from flask import Flask
 import threading
 
-
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 
 def delete_node_recursive(db, node_id):
@@ -894,7 +894,5 @@ if __name__ == "__main__":
         listen="0.0.0.0",
         port=int(os.environ.get("PORT", 10000)),
         url_path=TOKEN,
-        webhook_url=f"https://library-render-amirali3-git1.onrender.com/{TOKEN}"
+        webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
     )
-
-
