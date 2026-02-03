@@ -20,6 +20,21 @@ import threading
 
 app = Flask(__name__)
 
+# --- CONFIGURATION ---
+# توکن و آیدی عددی ادمین از متغیرهای محیطی خوانده می‌شود
+TOKEN = os.getenv("TOKEN")
+import os
+
+# خواندن لیست ادمین‌ها از متغیر محیطی
+ADMIN_IDS = []
+if os.getenv("ADMIN_IDS"):
+    ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS").split(",")))
+
+# بررسی اینکه حداقل یک ادمین تعریف شده
+if not ADMIN_IDS:
+    print("Error: ADMIN_IDS not set in environment variables.")
+    exit(1)
+#==========================================================================
 @app.get("/")
 def home():
     return "Bot is running!", 200
@@ -28,6 +43,16 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
+#==========================================================================
+if __name__ == "__main__":
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    # BOT MUST RUN IN MAIN THREAD
+    application = ApplicationBuilder().token(TOKEN).build()
+    application.run_polling()
+#==========================================================================
 
 def delete_node_recursive(db, node_id):
     # اگر نود وجود نداشت
@@ -58,21 +83,7 @@ def push_admin_history(context, db):
     # وقتی تغییر جدید داریم، redo باطل می‌شود
     future.clear()
 
-# --- CONFIGURATION ---
-# توکن و آیدی عددی ادمین از متغیرهای محیطی خوانده می‌شود
-TOKEN = os.getenv("TOKEN")
-import os
 
-# خواندن لیست ادمین‌ها از متغیر محیطی
-ADMIN_IDS = []
-if os.getenv("ADMIN_IDS"):
-    ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS").split(",")))
-
-# بررسی اینکه حداقل یک ادمین تعریف شده
-if not ADMIN_IDS:
-    print("Error: ADMIN_IDS not set in environment variables.")
-    exit(1)
-    
 # فایل دیتابیس
 DB_FILE = "database.json"
 
@@ -1113,6 +1124,8 @@ async def send_daily_backup(context: ContextTypes.DEFAULT_TYPE):
 
 
 
+
+
 @app.get("/")
 def home():
     return "Bot is running!", 200
@@ -1122,9 +1135,6 @@ def home():
 # --- MAIN ---
 # --- MAIN ---
 if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
     if not TOKEN:
         print("Error: TOKEN not found in environment variables.")
         exit(1)
