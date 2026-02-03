@@ -29,16 +29,6 @@ def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
 
-if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    # BOT MUST RUN IN MAIN THREAD
-    application = ApplicationBuilder().token(TOKEN).build()
-    application.run_polling()
-
-
 def delete_node_recursive(db, node_id):
     # اگر نود وجود نداشت
     if node_id not in db:
@@ -83,6 +73,15 @@ if not ADMIN_IDS:
     print("Error: ADMIN_IDS not set in environment variables.")
     exit(1)
 
+if __name__ == "__main__":
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    # BOT MUST RUN IN MAIN THREAD
+    application = ApplicationBuilder().token(TOKEN).build()
+    application.run_polling()
+    
 # فایل دیتابیس
 DB_FILE = "database.json"
 
