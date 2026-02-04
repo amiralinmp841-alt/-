@@ -138,9 +138,12 @@ def save_user_db(data):
     with open(USER_DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+# --- admin description --- -------------------------------------------------------------------------
+def is_admin_user(user_id):
+    user_db = load_user_db()
+    return (user_id in ADMIN_IDS) or (str(user_id) in user_db["admins"]["secondary"])
 
-
-# --- KEYBOARD BUILDERS ---
+# --- KEYBOARD BUILDERS --- -------------------------------------------------------------------------
 def get_keyboard(node_id, is_admin):
     db = load_db()
     node = db.get(node_id)
@@ -235,7 +238,7 @@ async def not_started(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    is_admin = (user_id in ADMIN_IDS)
+    is_admin = is_admin_user(user_id)
 
     # پاک‌سازی کامل وضعیت قبلی
     context.user_data.clear()
@@ -264,7 +267,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🎄 به ربات دانشگاه خوش آمدید. (V_4.0.0🔥)",
+        "🎄 به ربات دانشگاه خوش آمدید. (V_4.0.2🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -274,7 +277,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.effective_user.id
-    is_admin = (user_id in ADMIN_IDS)
+    is_admin = is_admin_user(user_id)
 
     # ======= ثبت کاربر ==================================================================
     user_db = load_user_db()
@@ -292,7 +295,20 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_db["users"][uid_str]["messages"] += 1
     save_user_db(user_db)
     # =====================================================================================
+    user_db = load_user_db()
+    pwd = user_db["admins"].get("admin_password")
+    if pwd and text == pwd:
+        # تبدیل به ادمین فرعی
+        uid_str = str(update.effective_user.id)
+        if uid_str not in user_db["admins"]["secondary"]:
+            user_db["admins"]["secondary"].append(uid_str)
+            save_user_db(user_db)
     
+        await update.message.reply_text("✅ رمز تایید شد! شما اکنون ادمین هستید.")
+        return CHOOSING
+    # =====================================================================================
+
+
     # بازیابی نود فعلی
     current_node_id = context.user_data.get('current_node', 'root')
     db = load_db()
@@ -309,7 +325,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CHOOSING
 
 
-    # 1. هندل کردن بازگشت و خانه------------------------------------------------------------------------------------------------------------------
+    # 1. هندل کردن بازگشت و خانه =============================================================================================
     if text == "🏠 صفحه اصلی":
         context.user_data['current_node'] = 'root'
         await update.message.reply_text("به صفحه اصلی بازگشتید.", reply_markup=get_keyboard('root', is_admin))
@@ -858,7 +874,7 @@ async def rename_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-# --- ADMIN ACTIONS HANDLERS ---
+# --- ADMIN ACTIONS HANDLERS ------------------------------------------------------------------------------------------
 
 def is_valid_node_id(text, db):
     return text in db and isinstance(db[text], dict)
@@ -1081,7 +1097,20 @@ async def send_daily_backup(context: ContextTypes.DEFAULT_TYPE):
         caption="📦 بکاپ اتوماتیک دیتابیس"
     )
 
-
+#---health check--------------------------------------------------------
+#from flask import Flask
+#import threading
+#
+#app = Flask(__name__)
+#
+#@app.route("/")
+#def home():
+#    return "OK", 200
+#
+#def run_flask():
+#    app.run(host="0.0.0.0", port=10000)
+#
+#threading.Thread(target=run_flask).start()
 # --- MAIN -------------------------------------------------------------
 if __name__ == "__main__":
     if not TOKEN:
@@ -1140,18 +1169,3 @@ if __name__ == "__main__":
         url_path=TOKEN,
         webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
     )
-
-#---health check--------------------------------------------------------
-from flask import Flask
-import threading
-
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "OK", 200
-
-def run_flask():
-    app.run(host="0.0.0.0", port=10000)
-
-threading.Thread(target=run_flask).start()
