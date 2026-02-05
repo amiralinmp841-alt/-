@@ -17,7 +17,7 @@ from telegram.ext import (
 import copy
 from flask import Flask
 import threading
-db = load_db()
+
 
 def delete_node_recursive(db, node_id):
     # اگر نود وجود نداشت
