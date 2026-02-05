@@ -338,7 +338,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "🔐 پنل مدیریت:",
                 reply_markup=ReplyKeyboardMarkup([
-                    [userdata"👑 مدیریت ادمین‌ها"],
+                    ["👑 مدیریت ادمین‌ها"],
                     ["📤 دریافت userdata"],
                     ["📥 وارد کردن userdata"],
                     ["🔙 بازگشت"]
@@ -360,7 +360,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "🔐 پنل مدیریت:",
             reply_markup=ReplyKeyboardMarkup([
-                [userdata"👑 مدیریت ادمین‌ها"],
+                ["👑 مدیریت ادمین‌ها"],
                 ["📤 دریافت userdata"],
                 ["📥 وارد کردن userdata"],
                 ["🔙 بازگشت"]
