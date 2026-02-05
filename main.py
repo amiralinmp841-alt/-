@@ -1290,22 +1290,22 @@ if __name__ == "__main__":
 
     application.add_handler(conv_handler, group=1)
     
-    ## --- Health check جداگانه برای uptime.com ---
-    #from flask import Flask
-    #import threading
-#
-    #app = Flask(__name__)
-#
-    #@app.route("/")
-    #def home():
-    #    return "OK", 200
-#
-    #def run_flask():
-    #    app.run(host="0.0.0.0", port=8080)
-#
-    #threading.Thread(target=run_flask, daemon=True).start()
-#
-    ## --- حالا ربات webhook رو اجرا کن ---
+    # --- Health check جداگانه برای uptime.com ---
+    from flask import Flask
+    import threading
+
+    app = Flask(__name__)
+
+    @app.route("/")
+    def home():
+        return "OK", 200
+
+    def run_flask():
+        app.run(host="0.0.0.0", port=8080)
+
+    threading.Thread(target=run_flask, daemon=True).start()
+
+    # --- حالا ربات webhook رو اجرا کن ---
     # ❗ خیلی مهم
     application.run_webhook(
         listen="0.0.0.0",
