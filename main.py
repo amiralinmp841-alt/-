@@ -86,8 +86,10 @@ logging.basicConfig(
     WAITING_RESTORE_FILE,
     WAITING_RENAME_BUTTON,
     WAITING_ADMIN_PASSWORD_EDIT,
-    WAITING_USERDATA_UPLOAD
-) = range(7)
+    WAITING_USERDATA_UPLOAD,
+    WAITING_ADD_ADMIN,
+    WAITING_REMOVE_ADMIN
+) = range(9)
 
 
 # --- DATABASE HANDLERS ---
@@ -259,7 +261,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.0.7🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.0.9🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -352,7 +354,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return CHOOSING
     
-    # --- Admin Accessibility ---
+    # --- Admin Accessibility ---==============================================================
     if is_admin and text == os.getenv("ADMIN_ACCESSIBILITY_NAME"):
         context.user_data["admin_panel"] = "access"
         await update.message.reply_text(
@@ -373,6 +375,8 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👑 مدیریت ادمین‌ها:",
             reply_markup=ReplyKeyboardMarkup([
                 ["تنظیم رمز ادمینی"],
+                ["➕ افزودن ادمین", "➖ حذف ادمین"],
+                ["📃 لیست ادمین‌ها"],
                 ["🔙 بازگشت"]
             ], resize_keyboard=True)
         )
@@ -423,7 +427,27 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=ReplyKeyboardMarkup([["❌ لغو"]], resize_keyboard=True)
         )
         return WAITING_USERDATA_UPLOAD
+
+    if is_admin and text == "➕ افزودن ادمین":
+        await update.message.reply_text(
+            "📝 آیدی عددی یا نام کاربری فرد مورد نظر را ارسال کنید:",
+            reply_markup=ReplyKeyboardMarkup([["❌ لغو"]], resize_keyboard=True)
+        )
+        return WAITING_ADD_ADMIN
     
+    if is_admin and text == "➖ حذف ادمین":
+        await update.message.reply_text(
+            "📝 آیدی عددی یا نام کاربری ادمینی که میخواید حذف کنید را ارسال کنید:",
+            reply_markup=ReplyKeyboardMarkup([["❌ لغو"]], resize_keyboard=True)
+        )
+        return WAITING_REMOVE_ADMIN
+    
+    if text == "❌ لغو":
+        await update.message.reply_text(
+            "❌ عملیات لغو شد.",
+            reply_markup=get_keyboard("admin_mgmt", True)
+        )
+        return CHOOSING
     
     
     #==============================================================================
@@ -747,7 +771,7 @@ async def rename_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-# --- ADMIN ACTIONS HANDLERS ---
+# --- ADMIN ACTIONS HANDLERS --- ==========================================================================================================
 async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
@@ -782,6 +806,17 @@ async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def restore_userdata(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import zipfile, io, json, os
 
+    text = update.message.text
+
+    if text in ["❌ لغو", "🔙 بازگشت"]:
+        await update.message.reply_text(
+            "❌ عملیات لغو شد.",
+            reply_markup=get_keyboard("access", True)
+        )
+        return CHOOSING
+
+    # بقیه کد ریستور userdata که قبلاً نوشته بودیم
+
     doc = update.message.document
     if not doc or not doc.file_name.endswith(".zip"):
         await update.message.reply_text("❌ فایل ZIP معتبر نیست")
@@ -802,17 +837,124 @@ async def restore_userdata(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "✅ userdata با موفقیت بازیابی شد",
-            reply_markup=get_keyboard("admin_mgmt", True)
+            reply_markup=get_keyboard("access", True)
         )
 
-        context.user_data["current_node"] = "admin_mgmt"
+        context.user_data["current_node"] = "access"
         return CHOOSING
 
     except Exception as e:
         await update.message.reply_text(f"❌ خطا در بازیابی:\n{e}")
         return WAITING_USERDATA_UPLOAD
 
-#=======================================================================
+async def add_sub_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    
+    # لغو
+    if text == "❌ لغو":
+        await update.message.reply_text(
+            "❌ عملیات لغو شد.",
+            reply_markup=get_keyboard("admin_mgmt", True)
+        )
+        return CHOOSING
+
+    userdata = load_userdata()
+    sub_admins = userdata.get("sub_admins", [])
+
+    # تشخیص عددی یا الفبایی
+    try:
+        new_admin_id = int(text)
+    except ValueError:
+        new_admin_id = text  # username
+
+    # اگر ادمین اصلی باشد (ADMIN_IDS) نمی‌توان اضافه کرد
+    if new_admin_id in ADMIN_IDS:
+        await update.message.reply_text("❌ این فرد قبلاً ادمین اصلی است.")
+        return WAITING_ADD_ADMIN
+
+    # اضافه کردن
+    if new_admin_id not in sub_admins:
+        sub_admins.append(new_admin_id)
+        userdata["sub_admins"] = sub_admins
+
+        # شمارنده دکمه‌ها برای این ادمین
+        if "sub_admins_buttons" not in userdata:
+            userdata["sub_admins_buttons"] = {}
+        if str(new_admin_id) not in userdata["sub_admins_buttons"]:
+            userdata["sub_admins_buttons"][str(new_admin_id)] = 0
+
+        save_userdata(userdata)
+
+        await update.message.reply_text(
+            f"✅ ادمین {new_admin_id} با موفقیت اضافه شد.",
+            reply_markup=get_keyboard("admin_mgmt", True)
+        )
+        return CHOOSING
+    else:
+        await update.message.reply_text("❌ این فرد قبلاً ادمین فرعی است.")
+        return WAITING_ADD_ADMIN
+
+async def remove_sub_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+
+    # لغو
+    if text == "❌ لغو":
+        await update.message.reply_text(
+            "❌ عملیات لغو شد.",
+            reply_markup=get_keyboard("admin_mgmt", True)
+        )
+        return CHOOSING
+
+    userdata = load_userdata()
+    sub_admins = userdata.get("sub_admins", [])
+
+    try:
+        admin_id = int(text)
+    except ValueError:
+        admin_id = text
+
+    # نمی‌توان ادمین اصلی را حذف کرد
+    if admin_id in ADMIN_IDS:
+        await update.message.reply_text("❌ نمی‌توان ادمین اصلی را حذف کرد.")
+        return WAITING_REMOVE_ADMIN
+
+    if admin_id in sub_admins:
+        sub_admins.remove(admin_id)
+        userdata["sub_admins"] = sub_admins
+        # اختیاری: حذف شمارنده دکمه
+        if "sub_admins_buttons" in userdata and str(admin_id) in userdata["sub_admins_buttons"]:
+            userdata["sub_admins_buttons"].pop(str(admin_id))
+        save_userdata(userdata)
+        await update.message.reply_text(
+            f"✅ ادمین {admin_id} حذف شد.",
+            reply_markup=get_keyboard("admin_mgmt", True)
+        )
+        return CHOOSING
+    else:
+        await update.message.reply_text("❌ این فرد ادمین نیست.")
+        return WAITING_REMOVE_ADMIN
+
+async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    userdata = load_userdata()
+    sub_admins = userdata.get("sub_admins", [])
+    buttons_count = userdata.get("sub_admins_buttons", {})
+
+    msg = "👑 ادمین‌های اصلی:\n"
+    for aid in ADMIN_IDS:
+        count = buttons_count.get(str(aid), 0)
+        msg += f"- {aid} | تعداد دکمه: {count}\n"
+
+    msg += "\n👤 ادمین‌های فرعی:\n"
+    # مرتب‌سازی فرعی‌ها بر اساس تعداد دکمه اضافه شده (زیاد به کم)
+    sorted_sub_admins = sorted(sub_admins, key=lambda x: buttons_count.get(str(x),0), reverse=True)
+    for aid in sorted_sub_admins:
+        count = buttons_count.get(str(aid), 0)
+        msg += f"- {aid} | تعداد دکمه: {count}\n"
+
+    await update.message.reply_text(msg, reply_markup=get_keyboard("admin_mgmt", True))
+    return CHOOSING
+
+#================================================================================================================
 def is_valid_node_id(text, db):
     return text in db and isinstance(db[text], dict)
 
@@ -889,6 +1031,21 @@ async def add_button_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"دکمه '{text}' ساخته شد.",
         reply_markup=get_keyboard(current_node_id, True)
+
+    # تعداد دکمه اضافه شده هر ادمین
+    userdata = load_userdata()
+    if "sub_admins_buttons" not in userdata:
+        userdata["sub_admins_buttons"] = {}
+    
+    user_id = update.effective_user.id
+    current_count = userdata["sub_admins_buttons"].get(str(user_id), 0)
+    userdata["sub_admins_buttons"][str(user_id)] = current_count + 1
+    save_userdata(userdata)
+    
+    await update.message.reply_text(
+        f"✅ دکمه '{text}' ساخته شد.",
+        reply_markup=get_keyboard(current_node_id, True)
+
     )
     return CHOOSING
 
@@ -1088,8 +1245,15 @@ if __name__ == "__main__":
                 MessageHandler(filters.TEXT & (~filters.COMMAND), set_admin_password)
             ],
             WAITING_USERDATA_UPLOAD: [
-                MessageHandler(filters.Document.ALL, restore_userdata)
+                MessageHandler(filters.Document.ALL, restore_userdata),
+                MessageHandler(filters.TEXT & (~filters.COMMAND), restore_userdata)  # برای لغو یا متن اشتباه
             ],
+            WAITING_ADD_ADMIN: [
+                MessageHandler(filters.TEXT & (~filters.COMMAND), add_sub_admin)
+            ],
+            WAITING_REMOVE_ADMIN: [
+                MessageHandler(filters.TEXT & (~filters.COMMAND), remove_sub_admin)
+            ]
             
         },
         fallbacks=[CommandHandler('start', start)]
