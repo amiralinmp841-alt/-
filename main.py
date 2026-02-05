@@ -48,6 +48,9 @@ def push_admin_history(context, db):
     future.clear()
 
 # --- CONFIGURATION ---
+sub_admins = db.get("sub_admins", [])
+# --- admin pannel
+ADMIN_ACCESSIBILITY_NAME = os.getenv("ADMIN_ACCESSIBILITY_NAME")
 # --- webhook_url مخصوص رندر
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 # توکن و آیدی عددی ادمین از متغیرهای محیطی خوانده می‌شود
@@ -147,6 +150,7 @@ def get_keyboard(node_id, is_admin):
         keyboard.append(["✏️ ویرایش نام دکمه", "🔑 دریافت هش و لینک دکمه", "🔀 جابه‌جایی چیدمان"])
         keyboard.append(["📥 دریافت بکاپ", "📤 وارد کردن بکاپ"])
         keyboard.append(["↩️", "↪️"])
+        keyboard.append([os.getenv("ADMIN_ACCESSIBILITY_NAME")])
 
 
     # دکمه‌های بازگشت
@@ -211,7 +215,7 @@ async def not_started(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    is_admin = (user_id in ADMIN_IDS)
+    is_admin = (user_id in ADMIN_IDS) or (user_id in sub_admins)
 
     # پاک‌سازی کامل وضعیت قبلی
     context.user_data.clear()
@@ -240,7 +244,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🎄 به ربات دانشگاه خوش آمدید. (V_3.11.21🔥)",
+        "🎄 به ربات دانشگاه خوش آمدید. (V_4.0.4🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -250,7 +254,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.effective_user.id
-    is_admin = (user_id in ADMIN_IDS)
+    is_admin = (user_id in ADMIN_IDS) or (user_id in sub_admins)
+
+    # --- Check Admin Password ---
+    admin_pass = db.get("admin_password")
+    if admin_pass and text == admin_pass:
+        if user_id not in ADMIN_IDS and user_id not in db.get("sub_admins", []):
+            db.setdefault("sub_admins", []).append(user_id)
+            save_db(db)
+    
+            await update.message.reply_text("✅ رمز تایید شد.\nشما اکنون ادمین هستید 😎")
+    
+            # اطلاع به ادمین‌ها
+            for aid in ADMIN_IDS:
+                if aid != user_id:
+                    await context.bot.send_message(
+                        aid,
+                        f"🚨 ادمین جدید اضافه شد!\n\n"
+                        f"👤 {update.effective_user.full_name}\n"
+                        f"🆔 {user_id}\n"
+                        f"🔗 @{update.effective_user.username}"
+                    )
+        return CHOOSING
     
     # بازیابی نود فعلی
     current_node_id = context.user_data.get('current_node', 'root')
@@ -284,7 +309,51 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("شما در صفحه اصلی هستید.", reply_markup=get_keyboard('root', is_admin))
         return CHOOSING
 
-            # 2. هندل کردن دستورات ادمین
+    # --- 2. هندل کردن دستورات ادمین ---
+
+    # --- Admin Accessibility ---
+    if is_admin and text == os.getenv("ADMIN_ACCESSIBILITY_NAME"):
+        await update.message.reply_text(
+            "🔐 پنل مدیریت:",
+            reply_markup=ReplyKeyboardMarkup([
+                ["مدیریت ادمین‌ها"],
+                ["🔙 بازگشت"]
+            ], resize_keyboard=True)
+        )
+        return CHOOSING
+
+    # --- Admin Management ---
+    if is_admin and text == "مدیریت ادمین‌ها":
+        await update.message.reply_text(
+            "👑 مدیریت ادمین‌ها:",
+            reply_markup=ReplyKeyboardMarkup([
+                ["تنظیم رمز ادمینی"],
+                ["🔙 بازگشت"]
+            ], resize_keyboard=True)
+        )
+        return CHOOSING
+
+    if is_admin and text == "تنظیم رمز ادمینی":
+        admin_pass = db.get("admin_password", "تعریف نشده")
+        await update.message.reply_text(
+            f"🔐 رمز ادمینی فعلی:\n\n<code>{admin_pass}</code>",
+            parse_mode="HTML",
+            reply_markup=ReplyKeyboardMarkup([
+                ["✏️ ویرایش رمز"],
+                ["🔙 بازگشت"]
+            ], resize_keyboard=True)
+        )
+        return CHOOSING
+
+    if is_admin and text == "✏️ ویرایش رمز":
+        await update.message.reply_text(
+            "✏️ رمز جدید ادمینی را ارسال کنید:",
+            reply_markup=ReplyKeyboardMarkup([["❌ لغو"]], resize_keyboard=True)
+        )
+        return WAITING_ADMIN_PASSWORD_EDIT
+    
+    
+            
     if is_admin:
         if text == "➕ افزودن دکمه":
             await update.message.reply_text("نام دکمه جدید را بنویسید:", reply_markup=ReplyKeyboardMarkup([["❌ لغو"]], resize_keyboard=True))
@@ -611,6 +680,27 @@ async def rename_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- ADMIN ACTIONS HANDLERS ---
 
+async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_pass = update.message.text.strip()
+    db = load_db()
+
+    if len(new_pass) < 4:
+        await update.message.reply_text("❌ رمز خیلی کوتاه است.")
+        return WAITING_ADMIN_PASSWORD_EDIT
+
+    db["admin_password"] = new_pass
+    save_db(db)
+
+    await update.message.reply_text(
+        "✅ رمز ادمینی با موفقیت تغییر کرد.",
+        reply_markup=ReplyKeyboardMarkup([
+            ["مدیریت ادمین‌ها"],
+            ["🔙 بازگشت"]
+        ], resize_keyboard=True)
+    )
+    return CHOOSING
+
+
 def is_valid_node_id(text, db):
     return text in db and isinstance(db[text], dict)
 
@@ -881,7 +971,11 @@ if __name__ == "__main__":
             ],
             WAITING_RENAME_BUTTON: [
                 MessageHandler(filters.TEXT & (~filters.COMMAND), rename_button)
+            ],
+            WAITING_ADMIN_PASSWORD_EDIT: [
+                MessageHandler(filters.TEXT & (~filters.COMMAND), set_admin_password)
             ]
+            
         },
         fallbacks=[CommandHandler('start', start)]
     )
