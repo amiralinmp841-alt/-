@@ -17,6 +17,7 @@ from telegram.ext import (
 import copy
 from flask import Flask
 import threading
+db = load_db()
 
 def delete_node_recursive(db, node_id):
     # اگر نود وجود نداشت
@@ -48,7 +49,7 @@ def push_admin_history(context, db):
     future.clear()
 
 # --- CONFIGURATION ---
-sub_admins = db.get("sub_admins", [])
+
 # --- admin pannel
 ADMIN_ACCESSIBILITY_NAME = os.getenv("ADMIN_ACCESSIBILITY_NAME")
 # --- webhook_url مخصوص رندر
@@ -215,6 +216,8 @@ async def not_started(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    db = load_db()
+    sub_admins = db.get("sub_admins", [])
     is_admin = (user_id in ADMIN_IDS) or (user_id in sub_admins)
 
     # پاک‌سازی کامل وضعیت قبلی
@@ -254,6 +257,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.effective_user.id
+    db = load_db()
+    sub_admins = db.get("sub_admins", [])
     is_admin = (user_id in ADMIN_IDS) or (user_id in sub_admins)
 
     # --- Check Admin Password ---
