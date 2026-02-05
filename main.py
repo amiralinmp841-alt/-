@@ -18,7 +18,6 @@ import copy
 from flask import Flask
 import threading
 
-
 def delete_node_recursive(db, node_id):
     # اگر نود وجود نداشت
     if node_id not in db:
@@ -261,7 +260,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.3🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.4🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -808,7 +807,7 @@ async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return CHOOSING
 
 async def restore_userdata(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    import zipfile, io, json, os
+
 
     text = update.message.text
 
