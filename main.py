@@ -1,7 +1,8 @@
 import logging
 import json
 import os
-import io
+#import io
+import io as iolib
 import uuid
 import zipfile
 from datetime import datetime
@@ -260,7 +261,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.5🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.6🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -405,7 +406,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
         json_bytes = json.dumps(userdata, ensure_ascii=False, indent=2).encode("utf-8")
     
-        zip_buffer = io.BytesIO()
+        zip_buffer = iolib.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
             zipf.writestr("userdata.json", json_bytes)
     
@@ -512,7 +513,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if text == "📥 دریافت بکاپ":
             # ساخت فایل زیپ از دیتابیس
-            mem_zip = io.BytesIO()
+            mem_zip = iolib.BytesIO()
             with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
                 zf.write(DB_FILE)
             mem_zip.seek(0)
@@ -833,7 +834,7 @@ async def restore_userdata(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_bytes = await file.download_as_bytearray()
 
     try:
-        with zipfile.ZipFile(io.BytesIO(file_bytes)) as zipf:
+        with zipfile.ZipFile(iolib.BytesIO(file_bytes)) as zipf:
             if "userdata.json" not in zipf.namelist():
                 await update.message.reply_text("❌ userdata.json داخل فایل نیست")
                 return WAITING_USERDATA_UPLOAD
@@ -1137,7 +1138,7 @@ async def restore_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     byte_array = await file.download_as_bytearray()
 
     try:
-        with zipfile.ZipFile(io.BytesIO(byte_array)) as zf:
+        with zipfile.ZipFile(iolib.BytesIO(byte_array)) as zf:
             # 🔍 پیدا کردن database.json بدون توجه به مسیر
             db_name = None
             for name in zf.namelist():
@@ -1189,7 +1190,7 @@ async def send_daily_backup(context: ContextTypes.DEFAULT_TYPE):
     if not os.path.exists(DB_FILE):
         return
 
-    mem_zip = io.BytesIO()
+    mem_zip = iolib.BytesIO()
     with zipfile.ZipFile(mem_zip, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(DB_FILE)
 
