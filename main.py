@@ -164,7 +164,7 @@ def get_keyboard(node_id, is_admin):
         keyboard.append(["✏️ ویرایش نام دکمه", "🔑 دریافت هش و لینک دکمه", "🔀 جابه‌جایی چیدمان"])
         keyboard.append(["📥 دریافت بکاپ", "📤 وارد کردن بکاپ"])
         keyboard.append(["↩️", "↪️"])
-        keyboard.append([os.getenv("ADMIN_ACCESSIBILITY_NAME")])
+        #keyboard.append([os.getenv("ADMIN_ACCESSIBILITY_NAME")])
 
 
     # دکمه‌های بازگشت
@@ -261,7 +261,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.0.9🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.0🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -338,7 +338,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "🔐 پنل مدیریت:",
                 reply_markup=ReplyKeyboardMarkup([
-                    ["مدیریت ادمین‌ها"],
+                    [userdata"👑 مدیریت ادمین‌ها"],
                     ["📤 دریافت userdata"],
                     ["📥 وارد کردن userdata"],
                     ["🔙 بازگشت"]
@@ -360,7 +360,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "🔐 پنل مدیریت:",
             reply_markup=ReplyKeyboardMarkup([
-                ["مدیریت ادمین‌ها"],
+                [userdata"👑 مدیریت ادمین‌ها"],
                 ["📤 دریافت userdata"],
                 ["📥 وارد کردن userdata"],
                 ["🔙 بازگشت"]
@@ -369,20 +369,20 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CHOOSING
 
     # --- Admin Management ---
-    if is_admin and text == "مدیریت ادمین‌ها":
+    if is_admin and text == userdata"👑 مدیریت ادمین‌ها":
         context.user_data["admin_panel"] = "admin_mgmt"
         await update.message.reply_text(
             "👑 مدیریت ادمین‌ها:",
             reply_markup=ReplyKeyboardMarkup([
-                ["تنظیم رمز ادمینی"],
+                ["🔑 تنظیم رمز ادمینی"],
                 ["➕ افزودن ادمین", "➖ حذف ادمین"],
-                ["📃 لیست ادمین‌ها"],
+                ["📋 لیست ادمین‌ها"],
                 ["🔙 بازگشت"]
             ], resize_keyboard=True)
         )
         return CHOOSING
 
-    if is_admin and text == "تنظیم رمز ادمینی":
+    if is_admin and text == "🔑 تنظیم رمز ادمینی":
         admin_pass = userdata.get("admin_password", "تعریف نشده")
         await update.message.reply_text(
             f"🔐 رمز ادمینی فعلی:\n\n<code>{admin_pass}</code>",
@@ -780,7 +780,7 @@ async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(
             "لغو شد.",
             reply_markup=ReplyKeyboardMarkup([
-                ["مدیریت ادمین‌ها"],
+                [userdata"👑 مدیریت ادمین‌ها"],
                 ["🔙 بازگشت"]
             ], resize_keyboard=True)
         )
@@ -797,7 +797,7 @@ async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text(
         "✅ رمز ادمینی با موفقیت تغییر کرد.",
         reply_markup=ReplyKeyboardMarkup([
-            ["مدیریت ادمین‌ها"],
+            [userdata"👑 مدیریت ادمین‌ها"],
             ["🔙 بازگشت"]
         ], resize_keyboard=True)
     )
@@ -1031,6 +1031,7 @@ async def add_button_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"دکمه '{text}' ساخته شد.",
         reply_markup=get_keyboard(current_node_id, True)
+    )
 
     # تعداد دکمه اضافه شده هر ادمین
     userdata = load_userdata()
@@ -1045,8 +1046,8 @@ async def add_button_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"✅ دکمه '{text}' ساخته شد.",
         reply_markup=get_keyboard(current_node_id, True)
-
     )
+
     return CHOOSING
 
 
@@ -1194,7 +1195,21 @@ async def send_daily_backup(context: ContextTypes.DEFAULT_TYPE):
 
 
 
-
+#---health check--------------------------------------------------------
+#from flask import Flask
+#import threading
+#
+#app = Flask(__name__)
+#
+#@app.route("/")
+#def home():
+#    return "OK", 200
+#
+#def run_flask():
+#    app.run(host="0.0.0.0", port=10000)
+#
+#threading.Thread(target=run_flask).start()
+# --- MAIN -------------------------------------------------------------
 # --- MAIN --- مخصوص رندر
 # --- MAIN -------------------------------------------------------------
 if __name__ == "__main__":
@@ -1260,7 +1275,23 @@ if __name__ == "__main__":
     )
 
     application.add_handler(conv_handler, group=1)
-
+    
+    ## --- Health check جداگانه برای uptime.com ---
+    #from flask import Flask
+    #import threading
+#
+    #app = Flask(__name__)
+#
+    #@app.route("/")
+    #def home():
+    #    return "OK", 200
+#
+    #def run_flask():
+    #    app.run(host="0.0.0.0", port=8080)
+#
+    #threading.Thread(target=run_flask, daemon=True).start()
+#
+    ## --- حالا ربات webhook رو اجرا کن ---
     # ❗ خیلی مهم
     application.run_webhook(
         listen="0.0.0.0",
