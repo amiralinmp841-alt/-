@@ -261,7 +261,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.0🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.2🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -781,6 +781,8 @@ async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "لغو شد.",
             reply_markup=ReplyKeyboardMarkup([
                 ["👑 مدیریت ادمین‌ها"],
+                ["📤 دریافت userdata"],
+                ["📥 وارد کردن userdata"],
                 ["🔙 بازگشت"]
             ], resize_keyboard=True)
         )
@@ -798,6 +800,8 @@ async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "✅ رمز ادمینی با موفقیت تغییر کرد.",
         reply_markup=ReplyKeyboardMarkup([
             ["👑 مدیریت ادمین‌ها"],
+            ["📤 دریافت userdata"],
+            ["📥 وارد کردن userdata"],
             ["🔙 بازگشت"]
         ], resize_keyboard=True)
     )
@@ -811,7 +815,12 @@ async def restore_userdata(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text in ["❌ لغو", "🔙 بازگشت"]:
         await update.message.reply_text(
             "❌ عملیات لغو شد.",
-            reply_markup=get_keyboard("access", True)
+            reply_markup=ReplyKeyboardMarkup([
+                ["👑 مدیریت ادمین‌ها"],
+                ["📤 دریافت userdata"],
+                ["📥 وارد کردن userdata"],
+                ["🔙 بازگشت"]
+            ], resize_keyboard=True)
         )
         return CHOOSING
 
@@ -837,10 +846,15 @@ async def restore_userdata(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "✅ userdata با موفقیت بازیابی شد",
-            reply_markup=get_keyboard("access", True)
+            reply_markup=ReplyKeyboardMarkup([
+                ["👑 مدیریت ادمین‌ها"],
+                ["📤 دریافت userdata"],
+                ["📥 وارد کردن userdata"],
+                ["🔙 بازگشت"]
+            ], resize_keyboard=True)
         )
 
-        context.user_data["current_node"] = "access"
+        context.user_data["current_node"] = "admin_mgmt"
         return CHOOSING
 
     except Exception as e:
@@ -954,7 +968,7 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, reply_markup=get_keyboard("admin_mgmt", True))
     return CHOOSING
 
-#================================================================================================================
+#=============================================================================================================================================
 def is_valid_node_id(text, db):
     return text in db and isinstance(db[text], dict)
 
