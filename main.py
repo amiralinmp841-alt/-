@@ -369,7 +369,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CHOOSING
 
     # --- Admin Management ---
-    if is_admin and text == userdata"👑 مدیریت ادمین‌ها":
+    if is_admin and text == "👑 مدیریت ادمین‌ها":
         context.user_data["admin_panel"] = "admin_mgmt"
         await update.message.reply_text(
             "👑 مدیریت ادمین‌ها:",
@@ -780,7 +780,7 @@ async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(
             "لغو شد.",
             reply_markup=ReplyKeyboardMarkup([
-                [userdata"👑 مدیریت ادمین‌ها"],
+                ["👑 مدیریت ادمین‌ها"],
                 ["🔙 بازگشت"]
             ], resize_keyboard=True)
         )
@@ -797,7 +797,7 @@ async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text(
         "✅ رمز ادمینی با موفقیت تغییر کرد.",
         reply_markup=ReplyKeyboardMarkup([
-            [userdata"👑 مدیریت ادمین‌ها"],
+            ["👑 مدیریت ادمین‌ها"],
             ["🔙 بازگشت"]
         ], resize_keyboard=True)
     )
