@@ -261,7 +261,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.6🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.7🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -1206,30 +1206,20 @@ async def send_daily_backup(context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# --- supabase --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+from supasync import start_sync_thread
 
 
-#---health check--------------------------------------------------------
-#from flask import Flask
-#import threading
-#
-#app = Flask(__name__)
-#
-#@app.route("/")
-#def home():
-#    return "OK", 200
-#
-#def run_flask():
-#    app.run(host="0.0.0.0", port=10000)
-#
-#threading.Thread(target=run_flask).start()
-# --- MAIN -------------------------------------------------------------
 # --- MAIN --- مخصوص رندر
-# --- MAIN -------------------------------------------------------------
+# --- MAIN --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
 if __name__ == "__main__":
     if not TOKEN:
         print("Error: TOKEN not found in environment variables.")
         exit(1)
 
+    # --- Restore فوری و start sync thread ---
+    initial_restore()      # restore دیتای DB و userdata قبل از start bot
+    start_sync_thread()    # thread watcher برای sync اتوماتیک
     # ساخت اپلیکیشن ربات
     application = ApplicationBuilder().token(TOKEN).build()
 
