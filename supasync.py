@@ -25,6 +25,28 @@ FILES = {
 last_hash = {}
 last_local_write = 0
 
+DEFAULT_DATABASE = {
+    "root": {
+        "name": "خانه",
+        "parent": None,
+        "children": [],
+        "contents": []
+    }
+}
+
+
+# --------- reset check ---------
+
+def is_userdata_reset(path):
+    """Check if userdata.json is effectively reset."""
+    data = read_json(path)
+    return "admin_password" not in data
+
+def is_database_reset(path):
+    """Check if database.json is effectively reset."""
+    data = read_json(path)
+    return data == DEFAULT_DATABASE
+
 
 # ---------- utils ----------
 
@@ -98,8 +120,9 @@ def watcher():
                 push_to_supabase(name, data)
                 last_hash[name] = h
 
-            # missing/zero -> restore
-            if not os.path.exists(path) or os.path.getsize(path) == 0:
+            # check reset -> restore
+            if (name == "userdata" and is_userdata_reset(path)) or \
+               (name == "database" and is_database_reset(path)):
                 restore_from_supabase(name, path)
 
         time.sleep(5)
@@ -108,10 +131,13 @@ def watcher():
 # ---------- initial_restore ----------
 
 def initial_restore():
-    print("[SYNC] Initial restore check")   # ← اینجا بذار
+    print("[SYNC] Initial restore check")
     for name, path in FILES.items():
-        if not os.path.exists(path) or os.path.getsize(path) == 0:
+        if name == "userdata" and is_userdata_reset(path):
             restore_from_supabase(name, path)
+        elif name == "database" and is_database_reset(path):
+            restore_from_supabase(name, path)
+
 
 # ---------- start ----------
 
