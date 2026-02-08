@@ -1211,7 +1211,6 @@ from supasync import start_sync_thread, initial_restore
 
 
 # --- MAIN --- مخصوص رندر
-# --- MAIN --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
 if __name__ == "__main__":
     if not TOKEN:
         print("Error: TOKEN not found in environment variables.")
@@ -1220,6 +1219,7 @@ if __name__ == "__main__":
     # --- Restore فوری و start sync thread ---
     initial_restore()      # restore دیتای DB و userdata قبل از start bot
     start_sync_thread()    # thread watcher برای sync اتوماتیک
+
     # ساخت اپلیکیشن ربات
     application = ApplicationBuilder().token(TOKEN).build()
 
@@ -1272,32 +1272,29 @@ if __name__ == "__main__":
             WAITING_REMOVE_ADMIN: [
                 MessageHandler(filters.TEXT & (~filters.COMMAND), remove_sub_admin)
             ]
-            
         },
         fallbacks=[CommandHandler('start', start)]
     )
 
     application.add_handler(conv_handler, group=1)
-#    
-#    # --- Health check جداگانه برای uptime.com ---
-#    from flask import Flask
-#    import threading
-#
-#    app = Flask(__name__)
-#
-#    @app.route("/")
-#    def home():
-#        return "OK", 200
-#
-#    def run_flask():
-#        app.run(host="0.0.0.0", port=8080)
-#
-#    threading.Thread(target=run_flask, daemon=True).start()
 
+    # --- Flask health check برای uptime.com ---
+    from flask import Flask
+    import threading
 
+    health_app = Flask(__name__)
+
+    @health_app.route("/healthz")
+    def health_check():
+        return "OK", 200
+
+    def run_health_flask():
+        health_app.run(host="0.0.0.0", port=8080)
+
+    threading.Thread(target=run_health_flask, daemon=True).start()
 
     # --- حالا ربات webhook رو اجرا کن ---
-    # ❗ خیلی مهم
+    # ❗ توجه: webhook روی پورت اصلی (مثلاً 10000) هست، health check روی پورت 8080
     application.run_webhook(
         listen="0.0.0.0",
         port=int(os.environ.get("PORT", 10000)),
