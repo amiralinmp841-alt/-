@@ -1209,7 +1209,22 @@ async def send_daily_backup(context: ContextTypes.DEFAULT_TYPE):
 # --- supabase --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
 from supasync import start_sync_thread, initial_restore
 
+# --------------------
+# Health check Flask app
+health_app = Flask("healthcheck")
 
+@health_app.route("/healthz")
+def health_check():
+    return "OK", 200
+
+def run_health_app():
+    port = int(os.environ.get("PORT", 10000))  # همون پورتی که Render بهت میده
+    health_app.run(host="0.0.0.0", port=port)
+
+# Thread برای اجرای health check
+threading.Thread(target=run_health_app, daemon=True).start()
+
+# --------------------
 # --- MAIN --- مخصوص رندر
 if __name__ == "__main__":
     if not TOKEN:
@@ -1278,16 +1293,6 @@ if __name__ == "__main__":
 
     application.add_handler(conv_handler, group=1)
 
-    # Health check روی همان پورت رندر
-    from flask import Flask
-    from werkzeug.middleware.dispatcher import DispatcherMiddleware
-    from telegram.ext import Application
-
-    health_app = Flask("healthcheck")
-
-    @health_app.route("/healthz")
-    def health_check():
-        return "OK", 200
 
     # Combine Flask health check با webhook telegram
     application.run_webhook(
