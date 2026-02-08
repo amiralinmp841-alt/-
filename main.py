@@ -1207,7 +1207,7 @@ async def send_daily_backup(context: ContextTypes.DEFAULT_TYPE):
 
 
 # --- supabase --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-from supasync import start_sync_thread
+from supasync import start_sync_thread, initial_restore
 
 
 # --- MAIN --- مخصوص رندر
