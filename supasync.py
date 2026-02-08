@@ -55,7 +55,7 @@ def is_valid_database(path):
 
     return isinstance(root["children"], list) and len(root["children"]) > 0
 
-    def needs_restore(name, path):
+def needs_restore(name, path):
     if not os.path.exists(path):
         return True
 
@@ -66,6 +66,7 @@ def is_valid_database(path):
         return not is_valid_database(path)
 
     return False
+
 
 
 # ---------- utils ----------
