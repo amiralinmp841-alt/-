@@ -37,15 +37,22 @@ DEFAULT_DATABASE = {
 
 # --------- reset check ---------
 
-def is_userdata_reset(path):
-    """Check if userdata.json is effectively reset."""
+def is_userdata_valid(path):
     data = read_json(path)
-    return "admin_password" not in data
+    return isinstance(data, dict) and "admin_password" in data
 
-def is_database_reset(path):
-    """Check if database.json is effectively reset."""
+
+def is_database_valid(path):
     data = read_json(path)
-    return data == DEFAULT_DATABASE
+    if not isinstance(data, dict):
+        return False
+
+    root = data.get("root")
+    if not isinstance(root, dict):
+        return False
+
+    children = root.get("children")
+    return isinstance(children, list) and len(children) > 0
 
 
 # ---------- utils ----------
@@ -112,18 +119,22 @@ def watcher():
     while True:
         for name, path in FILES.items():
 
+            data = read_json(path)
             h = file_hash(path)
 
-            # changed -> push
+            # 1️⃣ اول تشخیص ریست / ناقص
+            if name == "userdata" and not is_userdata_valid(path):
+                restore_from_supabase(name, path)
+                continue
+
+            if name == "database" and not is_database_valid(path):
+                restore_from_supabase(name, path)
+                continue
+
+            # 2️⃣ فقط اگر معتبر بود → push
             if h != last_hash.get(name):
-                data = read_json(path)
                 push_to_supabase(name, data)
                 last_hash[name] = h
-
-            # check reset -> restore
-            if (name == "userdata" and is_userdata_reset(path)) or \
-               (name == "database" and is_database_reset(path)):
-                restore_from_supabase(name, path)
 
         time.sleep(5)
 
@@ -132,10 +143,13 @@ def watcher():
 
 def initial_restore():
     print("[SYNC] Initial restore check")
+
     for name, path in FILES.items():
-        if name == "userdata" and is_userdata_reset(path):
+
+        if name == "userdata" and not is_userdata_valid(path):
             restore_from_supabase(name, path)
-        elif name == "database" and is_database_reset(path):
+
+        elif name == "database" and not is_database_valid(path):
             restore_from_supabase(name, path)
 
 
