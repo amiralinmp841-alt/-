@@ -18,7 +18,6 @@ from telegram.ext import (
 import copy
 from flask import Flask
 import threading
-from supabase import create_client
 
 def delete_node_recursive(db, node_id):
     # اگر نود وجود نداشت
@@ -103,34 +102,63 @@ logging.basicConfig(
 # --- DATABASE HANDLERS --- -------------------------------------------------------------------------------------
 DB_FILE = "/tmp/database.json"
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 # --- Download DB from Supabase ---
+import requests
+
 def download_db_from_supabase():
     try:
-        resp = supabase.storage.from_(SUPABASE_BUCKET).download(SUPABASE_DB_FILE)
-        if resp:
+        url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{SUPABASE_DB_FILE}"
+
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        }
+
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
             with open(DB_FILE, "wb") as f:
-                f.write(resp)
+                f.write(response.content)
             print("⬇️ DB synced from Supabase")
             return True
+        else:
+            print("❌ Download failed:", response.text)
+
     except Exception as e:
         print("❌ Failed to download DB:", e)
+
     return False
 
 
 # --- Upload DB to Supabase ---
 def upload_db_to_supabase():
     try:
+        url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{SUPABASE_DB_FILE}"
+
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json"
+        }
+
         with open(DB_FILE, "rb") as f:
-            supabase.storage.from_(SUPABASE_BUCKET).upload(
-                SUPABASE_DB_FILE, f, file_options={"content-type": "application/json", "upsert": "true"}
+            response = requests.post(
+                url + "?upsert=true",
+                headers=headers,
+                data=f
             )
-        print("⬆️ DB uploaded to Supabase")
-        return True
+
+        if response.status_code in (200, 201):
+            print("⬆️ DB uploaded to Supabase")
+            return True
+        else:
+            print("❌ Upload failed:", response.text)
+
     except Exception as e:
         print("❌ Failed to upload DB:", e)
+
     return False
 
 
