@@ -1411,8 +1411,11 @@ async def main():
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
 
-    await tg_app.start()
-    await asyncio.Event().wait()  # برنامه همیشه اجرا باقی می‌ماند
+    # ❌ دیگر tg_app.start() نیاز نیست
+    # await tg_app.start()
+
+    # برنامه همیشه اجرا باقی بماند
+    await asyncio.Event().wait()
 
 if __name__=="__main__":
     asyncio.run(main())
