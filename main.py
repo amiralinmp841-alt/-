@@ -1393,7 +1393,6 @@ def telegram_webhook():
     application.update_queue.put(update)
     return "OK", 200
 
-if name == "main":
     # ست کردن Webhook تلگرام
     application.bot.set_webhook(f"{WEBHOOK_URL}/{TOKEN}")
 
