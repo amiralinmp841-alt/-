@@ -314,7 +314,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.14🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.1.15🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -913,19 +913,12 @@ async def restore_userdata(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ خطا در بازیابی:\n{e}")
         return WAITING_USERDATA_UPLOAD
 
-def normalize_user_input(text: str):
+def ensure_numeric_id(text: str):
     text = text.strip()
+    if not text.isdigit():
+        return None  # ورودی معتبر نیست
+    return text  # آیدی عددی به صورت string
 
-    # اگر یوزرنیم باشد (با @ شروع شود یا فقط حروف/عدد/خط زیر)
-    if text.startswith("@"):
-        return text.lower()
-
-    # اگر فقط شامل ارقام باشد → آیدی عددی
-    if text.isdigit():
-        return int(text)
-
-    # اگر ترکیبی بود → یوزرنیم
-    return text.lower()
 
 
 async def add_sub_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -938,40 +931,42 @@ async def add_sub_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return CHOOSING
 
+    new_admin = ensure_numeric_id(text)
+    if new_admin is None:
+        await update.message.reply_text("❌ فقط آیدی عددی معتبر است. دوباره وارد کنید:")
+        return WAITING_ADD_ADMIN
+
     userdata = load_userdata()
     sub_admins = userdata.get("sub_admins", [])
 
-    new_admin = normalize_user_input(text)
-
-    # جلوگیری از ذخیره هم‌زمان str و int
-    new_admin_str = str(new_admin)
-
-    # جلوگیری از اضافه کردن ادمین اصلی
-    if new_admin in ADMIN_IDS or new_admin_str in ADMIN_IDS:
+    # جلوگیری از اضافه شدن ادمین اصلی
+    if new_admin in ADMIN_IDS:
         await update.message.reply_text("❌ این فرد قبلاً ادمین اصلی است.")
         return WAITING_ADD_ADMIN
 
     # اضافه کردن
-    if new_admin not in sub_admins and new_admin_str not in sub_admins:
-        sub_admins.append(new_admin_str)
+    if new_admin not in sub_admins:
+        sub_admins.append(new_admin)
         userdata["sub_admins"] = sub_admins
 
         if "sub_admins_buttons" not in userdata:
             userdata["sub_admins_buttons"] = {}
 
-        if new_admin_str not in userdata["sub_admins_buttons"]:
-            userdata["sub_admins_buttons"][new_admin_str] = 0
+        if new_admin not in userdata["sub_admins_buttons"]:
+            userdata["sub_admins_buttons"][new_admin] = 0
 
         save_userdata(userdata)
 
         await update.message.reply_text(
-            f"✅ ادمین {new_admin_str} با موفقیت اضافه شد.",
+            f"✅ ادمین {new_admin} با موفقیت اضافه شد.",
             reply_markup=get_keyboard("admin_mgmt", True)
         )
         return CHOOSING
+
     else:
         await update.message.reply_text("❌ این فرد قبلاً ادمین فرعی است.")
         return WAITING_ADD_ADMIN
+
 
 
 async def remove_sub_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -984,34 +979,37 @@ async def remove_sub_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return CHOOSING
 
+    admin_id = ensure_numeric_id(text)
+    if admin_id is None:
+        await update.message.reply_text("❌ فقط آیدی عددی معتبر است. دوباره ارسال کنید:")
+        return WAITING_REMOVE_ADMIN
+
     userdata = load_userdata()
     sub_admins = userdata.get("sub_admins", [])
 
-    admin = normalize_user_input(text)
-    admin_str = str(admin)
-
-    if admin in ADMIN_IDS or admin_str in ADMIN_IDS:
+    # جلوگیری از حذف ادمین اصلی
+    if admin_id in ADMIN_IDS:
         await update.message.reply_text("❌ نمی‌توان ادمین اصلی را حذف کرد.")
         return WAITING_REMOVE_ADMIN
 
-    if admin_str in sub_admins:
-        sub_admins.remove(admin_str)
+    if admin_id in sub_admins:
+        sub_admins.remove(admin_id)
         userdata["sub_admins"] = sub_admins
 
         if "sub_admins_buttons" in userdata:
-            userdata["sub_admins_buttons"].pop(admin_str, None)
+            userdata["sub_admins_buttons"].pop(admin_id, None)
 
         save_userdata(userdata)
 
         await update.message.reply_text(
-            f"✅ ادمین {admin_str} حذف شد.",
+            f"✅ ادمین {admin_id} حذف شد.",
             reply_markup=get_keyboard("admin_mgmt", True)
         )
         return CHOOSING
-
     else:
         await update.message.reply_text("❌ این فرد ادمین نیست.")
         return WAITING_REMOVE_ADMIN
+
 
 
 async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
