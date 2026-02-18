@@ -1062,7 +1062,7 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = "👑 ادمین‌های اصلی:\n"
     for aid in ADMIN_IDS:
-        count = buttons_c ount.get(str(aid), 0)
+        count = buttons_count.get(str(aid), 0)
         msg += f"- {aid} | تعداد دکمه: {count}\n"
 
     msg += "\n👤 ادمین‌های فرعی:\n"
