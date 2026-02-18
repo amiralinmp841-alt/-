@@ -345,7 +345,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.1🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.2🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -524,7 +524,10 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=ReplyKeyboardMarkup([["❌ لغو"]], resize_keyboard=True)
         )
         return WAITING_REMOVE_ADMIN
-    
+
+    if is_admin and text == "📋 لیست ادمین‌ها":
+        return await list_admins(update, context)
+
     if text == "❌ لغو":
         await update.message.reply_text(
             "❌ عملیات لغو شد.",
@@ -988,6 +991,14 @@ async def add_sub_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ ادمین {new_admin} با موفقیت اضافه شد.",
             reply_markup=get_keyboard("admin_mgmt", True)
         )
+        # 📩 ارسال پیام به ادمین جدید
+        try:
+            await context.bot.send_message(
+                chat_id=new_admin,
+                text="🎉 شما به عنوان ادمین فرعی ربات منصوب شدید."
+            )
+        except Exception as e:
+            print("Failed to notify new admin:", e)
         return CHOOSING
     else:
         await update.message.reply_text("❌ این فرد قبلاً ادمین فرعی است.")
@@ -1029,6 +1040,14 @@ async def remove_sub_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ ادمین {admin_id} حذف شد.",
             reply_markup=get_keyboard("admin_mgmt", True)
         )
+        # 📩 ارسال پیام به کاربر حذف‌شده
+        try:
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text="⚠️ شما از لیست ادمین‌های ربات حذف شدید."
+            )
+        except Exception as e:
+            print("Failed to notify removed admin:", e)
         return CHOOSING
     else:
         await update.message.reply_text("❌ این فرد ادمین نیست.")
@@ -1043,7 +1062,7 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = "👑 ادمین‌های اصلی:\n"
     for aid in ADMIN_IDS:
-        count = buttons_count.get(str(aid), 0)
+        count = buttons_c ount.get(str(aid), 0)
         msg += f"- {aid} | تعداد دکمه: {count}\n"
 
     msg += "\n👤 ادمین‌های فرعی:\n"
