@@ -345,7 +345,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.9🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.10🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -1381,24 +1381,21 @@ if __name__ == "__main__":
     from flask import Flask
     import threading
 
-    flask_app = Flask("health")
+app = Flask("health")
 
-    @flask_app.route("/")
-    def health_check():
-        return "OK", 200
+@app.route("/")
+def health():
+    return "OK", 200
 
-    # اجرا در Thread جدا
-    def run_flask():
-        flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+@app.route(f"/{TOKEN}", methods=["POST"])
+def telegram_webhook():
+    update = Update.de_json(request.get_json(force=True), application.bot)
+    application.update_queue.put(update)
+    return "OK", 200
 
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.start()
+if name == "main":
+    # ست کردن Webhook تلگرام
+    application.bot.set_webhook(f"{WEBHOOK_URL}/{TOKEN}")
 
-    # --- Webhook Telegram ---
-    # Webhook روی URL /<TOKEN> بمونه، Health check روی /
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
-        url_path=TOKEN,
-        webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
-    )
+    # اجرا روی پورتی که Render می‌دهد
+    app.run(host="0.0.0.0", port=PORT)
