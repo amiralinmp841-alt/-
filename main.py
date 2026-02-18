@@ -345,7 +345,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.2🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.4🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -1149,11 +1149,25 @@ async def add_button_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db[current_node_id]["children"].append(new_id)
     save_db(db)
 
+    #await update.message.reply_text(
+    #    f"دکمه '{text}' ساخته شد.",
+    #    reply_markup=get_keyboard(current_node_id, True)
+    #)
+
+    # تعداد دکمه اضافه شده هر ادمین
+    userdata = load_userdata()
+    if "sub_admins_buttons" not in userdata:
+        userdata["sub_admins_buttons"] = {}
+    
+    user_id = update.effective_user.id
+    current_count = userdata["sub_admins_buttons"].get(str(user_id), 0)
+    userdata["sub_admins_buttons"][str(user_id)] = current_count + 1
+    save_userdata(userdata)
+    
     await update.message.reply_text(
-        f"دکمه '{text}' ساخته شد.",
+        f"✅ دکمه '{text}' ساخته شد.",
         reply_markup=get_keyboard(current_node_id, True)
     )
-
     return CHOOSING
 
 
