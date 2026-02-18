@@ -2,6 +2,8 @@ python-telegram-bot[webhooks,job-queue]==20.7
 flask
 waitress
 requests
+aiohttp==3.9.5
+
 
 
 
