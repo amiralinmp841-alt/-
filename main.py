@@ -345,7 +345,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.8🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.9🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -1377,11 +1377,28 @@ if __name__ == "__main__":
 
     application.add_handler(conv_handler, group=1)
 
+    # --- Flask health check برای Uptime ---
+    from flask import Flask
+    import threading
 
-    # Combine Flask health check با webhook telegram
+    flask_app = Flask("health")
+
+    @flask_app.route("/")
+    def health_check():
+        return "OK", 200
+
+    # اجرا در Thread جدا
+    def run_flask():
+        flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+
+    # --- Webhook Telegram ---
+    # Webhook روی URL /<TOKEN> بمونه، Health check روی /
     application.run_webhook(
         listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),  # همین پورتی که Render می‌ده
+        port=int(os.environ.get("PORT", 10000)),
         url_path=TOKEN,
         webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
     )
