@@ -56,11 +56,15 @@ def push_admin_history(context, db):
 # --- wewb port ---
 PORT = int(os.environ.get("PORT", 10000))
 
-# --- supabase ---
+# --- supabase --- database
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "db")
 SUPABASE_DB_FILE = os.getenv("SUPABASE_DB_FILE", "database.json")
+
+# --- supabase --- userdata
+USERDATA_FILE = "/tmp/userdata.json"
+SUPABASE_USERDATA_FILE = "userdata.json"   # اسم داخل bucket
 
 # --- admin pannel
 ADMIN_ACCESSIBILITY_NAME = os.getenv("ADMIN_ACCESSIBILITY_NAME")
@@ -205,26 +209,97 @@ def save_db(data):
 
     # آپلود در Supabase
     upload_db_to_supabase()
-#==========================================================================================================
-
-
+#==========================================================================================================================
 
 # فایل بکاپ روزانه
 BACKUP_FILE = "/tmp/backup_database.zip"
-# --- user data --- --- --- --- --- --- --- --- --- -----------------------------------------------
-def load_userdata():
-    if not os.path.exists("userdata.json"):
-        return {}
-    with open("userdata.json", "r", encoding="utf-8") as f:
-        return json.load(f)
 
-def save_userdata(data):
-    with open("userdata.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
+# --- user data --- --- --- --- --- --- --- --- --- =====================================================================
 userdata = load_userdata()
 
-# --- KEYBOARD BUILDERS --- ------------------------------------------------------------------------
+def download_userdata_from_supabase():
+    try:
+        url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{SUPABASE_USERDATA_FILE}"
+
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        }
+
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
+            with open(USERDATA_FILE, "wb") as f:
+                f.write(response.content)
+
+            print("⬇️ Userdata synced from Supabase")
+            return True
+        else:
+            print("❌ Userdata download failed:", response.text)
+
+    except Exception as e:
+        print("❌ Failed to download userdata:", e)
+
+    return False
+
+
+def upload_userdata_to_supabase():
+    try:
+        url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{SUPABASE_USERDATA_FILE}"
+
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        with open(USERDATA_FILE, "rb") as f:
+            response = requests.put(
+                url,
+                headers=headers,
+                data=f
+            )
+
+        print("USERDATA UPLOAD STATUS:", response.status_code)
+
+        if response.status_code in (200, 201):
+            print("⬆️ Userdata uploaded to Supabase")
+            return True
+        else:
+            print("❌ Userdata upload failed:", response.text)
+
+    except Exception as e:
+        print("❌ Failed to upload userdata:", e)
+
+    return False
+
+
+def load_userdata():
+    # اگر فایل محلی نبود → از Supabase بگیر
+    if not os.path.exists(USERDATA_FILE):
+        print("⚠️ Local userdata not found. Restoring from Supabase...")
+        if not download_userdata_from_supabase():
+            print("⚠️ No userdata in Supabase. Creating new.")
+            save_userdata({})
+            return {}
+
+    try:
+        with open(USERDATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return {}
+
+
+def save_userdata(data):
+    # ذخیره لوکال
+    with open(USERDATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    # آپلود در Supabase
+    upload_userdata_to_supabase()
+
+
+# --- KEYBOARD BUILDERS --- #=====================================================================================================================
 def get_keyboard(node_id, is_admin):
     db = load_db()
     node = db.get(node_id)
@@ -351,7 +426,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.13🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.14🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
