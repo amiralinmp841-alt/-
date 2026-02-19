@@ -425,7 +425,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.14🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.15🔥)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -1144,16 +1144,32 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = "👑 ادمین‌های اصلی:\n"
     for aid in ADMIN_IDS:
         count = buttons_count.get(str(aid), 0)
-        msg += f"- {aid} | تعداد دکمه: {count}\n"
+        # اسم ادمین رو به لینک پروفایل کاربر می‌کنیم
+        # فرض می‌کنیم تو یه dict داری که اسم و یوزرنیم اصلی ادمینارو نگه می‌داره، مثلا ADMIN_NAMES[aid] و ADMIN_USERNAMES[aid]
+        name = ADMIN_NAMES.get(aid, str(aid))
+        username = ADMIN_USERNAMES.get(aid, "")
+        if username:
+            msg += f'- <a href="tg://user?id={aid}">{name} (@{username})</a> | {aid} | تعداد دکمه: {count}\n'
+        else:
+            msg += f'- <a href="tg://user?id={aid}">{name}</a> | {aid} | تعداد دکمه: {count}\n'
 
     msg += "\n👤 ادمین‌های فرعی:\n"
     # مرتب‌سازی فرعی‌ها بر اساس تعداد دکمه اضافه شده (زیاد به کم)
     sorted_sub_admins = sorted(sub_admins, key=lambda x: buttons_count.get(str(x),0), reverse=True)
     for aid in sorted_sub_admins:
         count = buttons_count.get(str(aid), 0)
-        msg += f"- {aid} | تعداد دکمه: {count}\n"
+        name = userdata.get("sub_admin_names", {}).get(str(aid), str(aid))
+        username = userdata.get("sub_admin_usernames", {}).get(str(aid), "")
+        if username:
+            msg += f'- <a href="tg://user?id={aid}">{name} (@{username})</a> | {aid} | تعداد دکمه: {count}\n'
+        else:
+            msg += f'- <a href="tg://user?id={aid}">{name}</a> | {aid} | تعداد دکمه: {count}\n'
 
-    await update.message.reply_text(msg, reply_markup=get_keyboard("admin_mgmt", True))
+    await update.message.reply_text(
+        msg, 
+        reply_markup=get_keyboard("admin_mgmt", True),
+        parse_mode="HTML"  # خیلی مهم برای اینکه لینک‌ها کار کنه
+    )
     return CHOOSING
 
 #=============================================================================================================================================
