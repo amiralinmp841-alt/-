@@ -1,3 +1,9 @@
+# --- مخصوص FATHER  ---
+# --- مخصوص FATHER  ---
+# --- مخصوص FATHER  ---
+# --- مخصوص FATHER  ---
+# --- مخصوص FATHER  ---
+# --- مخصوص FATHER  ---
 import logging
 import json
 import os
@@ -20,6 +26,8 @@ from flask import Flask
 import threading
 import asyncio
 from aiohttp import web
+import requests
+
 
 
 def delete_node_recursive(db, node_id):
@@ -51,7 +59,7 @@ def push_admin_history(context, db):
     # وقتی تغییر جدید داریم، redo باطل می‌شود
     future.clear()
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION ---
 
 # --- wewb port ---
 PORT = int(os.environ.get("PORT", 10000))
@@ -109,13 +117,11 @@ logging.basicConfig(
 ) = range(9)
 
 
-# --- DATABASE HANDLERS --- -------------------------------------------------------------------------------------
+# ============ DATABASE USERDATA =========== ============ DATABASE USERDATA =========== ============ DATABASE USERDATA =========== ============ DATABASE USERDATA ===========
+
 DB_FILE = "/tmp/database.json"
 
-
-
 # --- Download DB from Supabase ---
-import requests
 
 def download_db_from_supabase():
     try:
@@ -209,12 +215,16 @@ def save_db(data):
 
     # آپلود در Supabase
     upload_db_to_supabase()
-#==========================================================================================================================
+
+#==  =========  =========  ========  ========  ======  ========  ========  =========
 
 # فایل بکاپ روزانه
 BACKUP_FILE = "/tmp/backup_database.zip"
 
-# --- user data --- --- --- --- --- --- --- --- --- =====================================================================
+# ============ DATABASE USERDATA END =========== ============ DATABASE USERDATA END =========== ============ DATABASE USERDATA END =========== ============ DATABASE USERDATA
+
+
+# ============ SUPABASE USERDATA =========== ============ SUPABASE USERDATA =========== ============ SUPABASE USERDATA =========== ============ SUPABASE USERDATA =========== 
 
 def download_userdata_from_supabase():
     try:
@@ -298,7 +308,10 @@ def save_userdata(data):
     upload_userdata_to_supabase()
 
 userdata = load_userdata()
-# --- KEYBOARD BUILDERS --- #=====================================================================================================================
+# ======= SUPABASE USERDATA END ======== ============ SUPABASE USERDATA END =========== ============ SUPABASE USERDATA END =========== ============ SUPABASE USERDATA END ========= 
+
+# --- KEYBOARD BUILDERS --- --- KEYBOARD BUILDERS --- --- KEYBOARD BUILDERS --- --- KEYBOARD BUILDERS --- --- KEYBOARD BUILDERS --- --- KEYBOARD BUILDERS --- --- KEYBOARD BUILDERS -
+
 def get_keyboard(node_id, is_admin):
     db = load_db()
     node = db.get(node_id)
@@ -425,7 +438,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_node"] = "root"
 
     await update.message.reply_text(
-        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.15🔥)",
+        "🕊️ به ربات دانشگاه خوش آمدید. (V_4.2.16)",
         reply_markup=get_keyboard("root", is_admin)
     )
 
@@ -439,7 +452,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sub_admins = userdata.get("sub_admins", [])
     is_admin = (user_id in ADMIN_IDS) or (user_id in sub_admins)
 
-    # --- Check Admin Password --- ---------------------------------------------------------------------------------------
+    # --- Check Admin Password --- --- Check Admin Password --- --- Check Admin Password --- --- Check Admin Password --- --- Check Admin Password --- --- Check Admin Password --- 
     admin_pass = userdata.get("admin_password")
     if admin_pass and text == admin_pass:
         if user_id not in ADMIN_IDS and user_id not in userdata.get("sub_admins", []):
@@ -459,7 +472,8 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"🔗 @{update.effective_user.username}"
                     )
         return CHOOSING
-    #=====================================================================================================================
+    # --- Check Admin Password --- --- Check Admin Password --- --- Check Admin Password --- --- Check Admin Password --- --- Check Admin Password --- --- Check Admin Password --- 
+
     # بازیابی نود فعلی
     current_node_id = context.user_data.get('current_node', 'root')
     db = load_db()
@@ -492,7 +506,8 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("شما در صفحه اصلی هستید.", reply_markup=get_keyboard('root', is_admin))
         return CHOOSING
 
-    # --- 2. هندل کردن دستورات ادمین ---
+    # --- 2. هندل کردن دستورات ادمین ---  --- هندل کردن دستورات ادمین --- --- هندل کردن دستورات ادمین --- --- هندل کردن دستورات ادمین --- --- هندل کردن دستورات ادمین ---
+
     # --- Admin panel back handling ------------------------------------------------------------------------------------------
     if text == "🔙 بازگشت" and context.user_data.get("admin_panel"):
         panel = context.user_data["admin_panel"]
@@ -518,7 +533,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return CHOOSING
     
-    # --- Admin Accessibility ---=======================================================================
+    # --- Admin Accessibility --- 
     if is_admin and text == os.getenv("ADMIN_ACCESSIBILITY_NAME"):
         context.user_data["admin_panel"] = "access"
         await update.message.reply_text(
@@ -617,7 +632,7 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CHOOSING
     
     
-    #=============================================================================================================================================
+    # ======= Admin panel handling END ======= ======= Admin panel handling END ======= ======= Admin panel handling END ======= ======= Admin panel handling END ======= ===
             
     if is_admin:
         if text == "➕ افزودن دکمه":
@@ -777,10 +792,6 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     return CHOOSING
         
-        
-                    
-        
-
 
         if text == "🔀 جابه‌جایی چیدمان":
             children = db[current_node_id].get("children", [])
@@ -887,8 +898,6 @@ async def handle_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return CHOOSING
         
 
-
-
     # 3. هندل کردن ناوبری (کلیک روی دکمه‌های پوشه)
     # چک کنیم آیا تکست کاربر نام یکی از دکمه‌های زیرمجموعه است؟
     children = db[current_node_id].get("children", [])
@@ -938,7 +947,7 @@ async def rename_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-# --- ADMIN ACTIONS HANDLERS --- ==========================================================================================================
+# === ADMIN ACTIONS HANDLERS === ADMIN ACTIONS HANDLERS === ADMIN ACTIONS HANDLERS === ADMIN ACTIONS HANDLERS === ADMIN ACTIONS HANDLERS === ADMIN ACTIONS HANDLERS === 
 async def set_admin_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
@@ -1141,17 +1150,22 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sub_admins = userdata.get("sub_admins", [])
     buttons_count = userdata.get("sub_admins_buttons", {})
 
-    msg = "👑 ادمین‌های اصلی:\n"
+    # ✅ همه ID ها رو int کن
+    main_admins = [int(x) for x in ADMIN_IDS]
+    sub_admins = [int(x) for x in sub_admins]
 
-    # مرتب سازی ادمین‌های اصلی بر اساس تعداد دکمه (زیاد به کم)
+    msg = "👑 ادمین‌های اصلی:\n\n"
+
+    # مرتب سازی اصلی‌ها
     sorted_main_admins = sorted(
-        ADMIN_IDS,
+        main_admins,
         key=lambda x: buttons_count.get(str(x), 0),
         reverse=True
     )
 
     for aid in sorted_main_admins:
         count = buttons_count.get(str(aid), 0)
+
         try:
             chat = await context.bot.get_chat(aid)
             name = chat.full_name
@@ -1160,17 +1174,14 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
             name = str(aid)
             username = None
 
-        # ساخت اسم آبی لینک شده + یوزرنیم داخلش
-        if username:
-            display_name = f"{name} (@{username})"
-        else:
-            display_name = name
+        # لینک مستقیم به پروفایل
+        name_link = f'<a href="tg://user?id={aid}">{name}</a>'
 
-        msg += f'- <a href="tg://user?id={aid}">{display_name}</a> | {aid} | تعداد دکمه: {count}\n'
+        msg += f'{name_link} | <code>{aid}</code> | تعداد دکمه : {count}\n'
 
-    msg += "\n👤 ادمین‌های فرعی:\n"
+    msg += "\n👤 ادمین‌های فرعی:\n\n"
 
-    # مرتب سازی فرعی‌ها بر اساس تعداد دکمه (زیاد به کم)
+    # مرتب سازی فرعی‌ها
     sorted_sub_admins = sorted(
         sub_admins,
         key=lambda x: buttons_count.get(str(x), 0),
@@ -1179,6 +1190,7 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for aid in sorted_sub_admins:
         count = buttons_count.get(str(aid), 0)
+
         try:
             chat = await context.bot.get_chat(aid)
             name = chat.full_name
@@ -1187,21 +1199,21 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
             name = str(aid)
             username = None
 
-        if username:
-            display_name = f"{name} (@{username})"
-        else:
-            display_name = name
+        name_link = f'<a href="tg://user?id={aid}">{name}</a>'
 
-        msg += f'- <a href="tg://user?id={aid}">{display_name}</a> | {aid} | تعداد دکمه: {count}\n'
+        msg += f'{name_link} | <code>{aid}</code> | تعداد دکمه : {count}\n'
 
     await update.message.reply_text(
         msg,
         reply_markup=get_keyboard("admin_mgmt", True),
-        parse_mode="HTML"
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
     return CHOOSING
-#=============================================================================================================================================
+
+# === ADMIN ACTIONS HANDLERS END === ADMIN ACTIONS HANDLERS === ADMIN ACTIONS HANDLERS END === ADMIN ACTIONS HANDLERS END === ADMIN ACTIONS HANDLERS END === ADMIN ACTIONS HANDLERS END= 
+
 def is_valid_node_id(text, db):
     return text in db and isinstance(db[text], dict)
 
@@ -1440,7 +1452,7 @@ async def send_daily_backup(context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ================= BUILD APPLICATION =================
+# ======== BUILD APPLICATION ========  ======== BUILD APPLICATION ======== ======== BUILD APPLICATION ======== ======== BUILD APPLICATION ======== ======== BUILD APPLICATION ========
 def build_application():
 
     # ساخت اپلیکیشن ربات
@@ -1514,7 +1526,18 @@ async def webhook_handler(request):
     await app.process_update(update)
     return web.Response(text="OK")
 
-# ================= MAIN =================
+# ===👆🏻=== COMMEN CODE FOR BABIES/FATHER ===☝🏻=== COMMEN CODE FOR BABIES/FATHER =======  ===👆🏻=== COMMEN CODE FOR BABIES/FATHER ===☝🏻=== COMMEN CODE FOR BABIES/FATHER =======
+# ===👆🏻=== COMMEN CODE FOR BABIES/FATHER ===☝🏻=== COMMEN CODE FOR BABIES/FATHER =======  ===👆🏻=== COMMEN CODE FOR BABIES/FATHER ===☝🏻=== COMMEN CODE FOR BABIES/FATHER =======
+# ===👆🏻=== COMMEN CODE FOR BABIES/FATHER ===☝🏻=== COMMEN CODE FOR BABIES/FATHER =======  ===👆🏻=== COMMEN CODE FOR BABIES/FATHER ===☝🏻=== COMMEN CODE FOR BABIES/FATHER =======
+# ===👆🏻=== COMMEN CODE FOR BABIES/FATHER ===☝🏻=== COMMEN CODE FOR BABIES/FATHER =======  ===👆🏻=== COMMEN CODE FOR BABIES/FATHER ===☝🏻=== COMMEN CODE FOR BABIES/FATHER =======
+# ===👆🏻=== COMMEN CODE FOR BABIES/FATHER ===☝🏻=== COMMEN CODE FOR BABIES/FATHER =======  ===👆🏻=== COMMEN CODE FOR BABIES/FATHER ===☝🏻=== COMMEN CODE FOR BABIES/FATHER =======
+
+
+
+
+# ======= MAIN for FATHER ======= ======= MAIN for FATHER ======= ======= MAIN for FATHER ======= ======= MAIN for FATHER ======= ======= MAIN for FATHER ======= ======= MAIN for FATHER =
+
+# ================= MAIN ================
 async def main():
     tg_app = build_application()
     await tg_app.initialize()
