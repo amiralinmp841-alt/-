@@ -6034,7 +6034,7 @@ async def miniapp_command(update, context):
         web_app=WebAppInfo(url=MINIAPP_URL)
     )
     await update.message.reply_text(
-        "برای مرور کتابخانه روی دکمه‌ی زیر بزنید:",
+        "برای مرور کتابخانه روی دکمه‌ی زیر بزنید. برای بازگشت به حالت عادی، /start بزنید.",
         reply_markup=ReplyKeyboardMarkup([[btn]], resize_keyboard=True)
     )
 
