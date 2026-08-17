@@ -25,7 +25,8 @@ from telegram import (
     InputMediaVideo,
     InputMediaDocument,
     InputMediaAudio,
-    MessageReactionUpdated
+    MessageReactionUpdated,
+    WebAppInfo
 )
 
 from telegram.ext import (
@@ -52,7 +53,7 @@ from smart_search import smart_search
 from html import escape
 from telegram.ext import MessageReactionHandler
 from telegram import MessageReactionUpdated
-
+from miniapp import miniapp_data, miniapp_file
 
 def delete_node_recursive(db, node_id):
     # اگر نود وجود نداشت
@@ -102,6 +103,8 @@ if os.getenv("ADMIN_IDS"):
 if not ADMIN_IDS:
     print("Error: ADMIN_IDS not set in environment variables.")
     exit(1)
+
+MINIAPP_URL = os.getenv("MINIAPP_URL", "https://YOUR-APP.onrender.com/miniapp")
 
 # فایل دیتابیس
 DB_FILE = "/tmp/database.json"
@@ -6025,6 +6028,17 @@ async def handle_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         break
 
 
+async def miniapp_command(update, context):
+    btn = KeyboardButton(
+        text="📚 مشاهده کتابخانه",
+        web_app=WebAppInfo(url=MINIAPP_URL)
+    )
+    await update.message.reply_text(
+        "برای مرور کتابخانه روی دکمه‌ی زیر بزنید:",
+        reply_markup=ReplyKeyboardMarkup([[btn]], resize_keyboard=True)
+    )
+
+
 async def restore_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # لغو
     if update.message.text == "❌ لغو":
@@ -6157,8 +6171,8 @@ def build_application():
     application.add_handler(CommandHandler("4", set_row_count), group=0)
     application.add_handler(CommandHandler("5", set_row_count), group=0)
     application.add_handler(CommandHandler("6", set_row_count), group=0)
-    # در کنار هندلرهای سراسری دیگر در build_application
     application.add_handler(CommandHandler("style", set_custom_layout), group=0)
+    application.add_handler(CommandHandler("miniapp", miniapp_command), group=0)
 
     
     application.add_handler(
@@ -6332,9 +6346,40 @@ async def main():
     # aiohttp web app برای Health check و Webhook
     webapp = web.Application()
     webapp["tg"] = tg_app
+
+    # ⭐ مهم: برای miniapp_file
+    webapp["bot"] = tg_app.bot
+
     webapp.router.add_get("/", health)
     webapp.router.add_get("/health", health)
     webapp.router.add_post(f"/{TOKEN}", webhook_handler)
+
+    # ================= MINI APP =================
+
+    static_html = os.path.join(
+        os.path.dirname(__file__),
+        "static",
+        "miniapp.html"
+    )
+
+    webapp.router.add_get(
+        "/miniapp",
+        lambda r: web.FileResponse(static_html)
+    )
+
+    # اطلاعات دیتابیس
+    webapp.router.add_get(
+        "/miniapp-data",
+        miniapp_data
+    )
+
+    # ⭐⭐⭐ دریافت واقعی فایل از Telegram
+    webapp.router.add_get(
+        "/miniapp-file",
+        miniapp_file
+    )
+    
+    # ====================
 
     runner = web.AppRunner(webapp)
     await runner.setup()
