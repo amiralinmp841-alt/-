@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>کتابخانه مجازی</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    :root {
+      --primary-bg: var(--tg-theme-bg-color, #f0f2f5);
+      --card-bg: rgba(255, 255, 255, 0.85);
+      --text-main: var(--tg-theme-text-color, #1c1e21);
+      --text-hint: var(--tg-theme-hint-color, #888);
+      --accent-color: var(--tg-theme-button-color, #2481cc);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background: var(--primary-bg);
+      color: var(--text-main);
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      line-height: 1.6;
+    }
+
+    /* Container for PC and Mobile optimization */
+    #app-container {
+      width: 100%;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      text-align: center;
+      margin: 10px 0 25px;
+    }
+
+    .header h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-bottom: 10px;
+      color: var(--text-main);
+    }
+
+    .crumb {
+      font-size: 0.85rem;
+      color: var(--text-hint);
+      word-break: break-word;
+      background: rgba(0,0,0,0.03);
+      padding: 8px 15px;
+      border-radius: 12px;
+      display: inline-block;
+    }
+
+    .crumb a {
+      color: var(--accent-color);
+      text-decoration: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: opacity 0.2s;
+    }
+
+    /* Glassmorphism Cards */
+    .content-box {
+      background: var(--card-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 24px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255,255,255,0.3);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+    }
+
+    .content-box h3 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-hint);
+      margin-bottom: 15px;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      padding-bottom: 8px;
+    }
+
+    .text-item {
+      background: rgba(0,0,0,0.03);
+      border-radius: 16px;
+      padding: 16px;
+      margin: 10px 0;
+      font-size: 0.95rem;
+      color: var(--text-main);
+    }
+
+    /* File items */
+    .file-item {
+      background: rgba(255,255,255,0.5);
+      border-radius: 18px;
+      padding: 16px;
+      margin: 10px 0;
+      border: 1px solid rgba(0,0,0,0.05);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .file-item.has-file { cursor: pointer; }
+    .file-item.has-file:active { transform: scale(0.97); background: rgba(0,0,0,0.05); }
+
+    .file-title {
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 1.05rem;
+    }
+
+    .file-open {
+      font-size: 0.75rem;
+      background: var(--accent-color);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 10px;
+      margin-right: auto;
+    }
+
+    .file-caption { font-size: 0.85rem; opacity: 0.75; margin-top: 6px; }
+    .file-type { display: inline-block; margin-top: 10px; font-size: 0.7rem; color: var(--text-hint); font-weight: 700; text-transform: uppercase; }
+
+    /* Luxury Buttons */
+    .row { display: flex; gap: 12px; margin-bottom: 12px; }
+    .btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: none;
+      padding: 18px 20px;
+      border-radius: 20px;
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+      min-height: 60px;
+    }
+
+    .btn:active { transform: scale(0.96); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .btn .count { background: rgba(255,255,255,0.25); padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
+    .btn .arrow { opacity: 0.8; font-size: 1.2rem; }
+
+    /* Gradient Themes */
+    .green { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+    .blue { background: linear-gradient(135deg, #3498db, #2980b9); }
+    .red { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+    .orange { background: linear-gradient(135deg, #f39c12, #d35400); }
+    .purple { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+    .none { background: var(--accent-color); }
+
+    /* Footer */
+    .footer { display: flex; gap: 15px; margin-top: auto; padding-top: 40px; width: 100%; }
+    .footer button {
+      flex: 1;
+      padding: 16px;
+      border: none;
+      border-radius: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--card-bg);
+      color: var(--text-main);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+      transition: all 0.2s;
+    }
+    .footer button:active { background: #eee; }
+
+    .empty { color: var(--text-hint); text-align: center; padding: 40px 10px; font-size: 1rem; }
+  </style>
+</head>
+
+<body>
+  <div id="app-container">
+    <div class="header">
+      <h1 id="title">📚 در حال دریافت...</h1>
+      <div class="crumb" id="crumb"></div>
+    </div>
+
+    <div id="content"></div>
+    <div id="buttons"></div>
+
+    <p id="empty" class="empty" style="display: none;">این بخش خالی است.</p>
+
+    <div class="footer">
+      <button type="button" id="btn-back" onclick="goBack()">🔙 بازگشت</button>
+      <button type="button" onclick="goTo('root')">🏠 خانه</button>
+    </div>
+  </div>
+
+  <script>
+    /* ---------------------------------------------------------
+       LOGIC (Preserved exactly as requested)
+    --------------------------------------------------------- */
+    const tg = window.Telegram?.WebApp;
+    if (tg) { tg.ready(); tg.expand(); if (tg.BackButton) tg.BackButton.onClick(() => goBack()); }
+
+    let historyStack = [];
+    const contentIcons = { photo: "📷", video: "🎬", document: "📄", audio: "🎵", voice: "🎤", animation: "✨", sticker: "🏷️", video_note: "⭕️", contact: "👤", location: "📍", text: "📝" };
+    const contentTypeNames = { photo: "عکس", video: "ویدئو", document: "سند", audio: "صوت", voice: "پیام صوتی", animation: "انیمیشن", sticker: "استیکر", video_note: "ویدئوی گرد", contact: "مخاطب", location: "موقعیت", text: "متن" };
+
+    async function fetchNode(nodeId) {
+      const response = await fetch("/miniapp-data?node=" + encodeURIComponent(nodeId), { cache: "no-store" });
+      let result;
+      try { result = await response.json(); } catch (error) { throw new Error("پاسخ سرور نامعتبر است."); }
+      if (!response.ok || result.ok === false) throw new Error(result.error || "خطا در دریافت اطلاعات.");
+      return result.data || result;
+    }
+
+    function applyStyle(element, style) {
+      if (!style || style === "none") { element.classList.add("none"); return; }
+      if (typeof style === "string" && style.startsWith("#")) { element.style.background = style; return; }
+      const safeClass = String(style).replace(/[^a-zA-Z0-9_-]/g, "");
+      element.classList.add(safeClass || "none");
+    }
+
+    function updateNavButtons(currentNodeId) {
+      const isRoot = currentNodeId === "root" || historyStack.length === 0;
+      const backBtn = document.getElementById("btn-back");
+      if (backBtn) { backBtn.style.opacity = isRoot ? "0.5" : "1"; backBtn.disabled = isRoot; }
+      if (tg?.BackButton) { isRoot ? tg.BackButton.hide() : tg.BackButton.show(); }
+    }
+
+    function renderCrumb(node) {
+      const crumb = document.getElementById("crumb"); crumb.innerHTML = "";
+      const breadcrumb = Array.isArray(node.breadcrumb) ? node.breadcrumb : [];
+      breadcrumb.forEach((item, index) => {
+        const link = document.createElement("a");
+        link.textContent = item.name || "بدون نام";
+        link.onclick = (e) => { e.preventDefault(); goTo(item.id); };
+        crumb.appendChild(link);
+        if (index < breadcrumb.length - 1) crumb.appendChild(document.createTextNode(" › "));
+      });
+    }
+
+    function getFileName(item) { return item.file_name || item.filename || item.document_name || item.title || ""; }
+
+    function createFileItem(item) {
+      const itemDiv = document.createElement("div"); itemDiv.className = "file-item";
+      const icon = contentIcons[item.type] || "📎";
+      const typeName = contentTypeNames[item.type] || "فایل";
+      const fileName = getFileName(item);
+
+      const title = document.createElement("div"); title.className = "file-title";
+      title.innerHTML = `<span>${icon}</span><span class="file-name">${fileName || `فایل ${typeName}`}</span>`;
+      
+      if (item.file_id) {
+        title.innerHTML += `<span class="file-open">مشاهده</span>`;
+        itemDiv.classList.add("has-file");
+        itemDiv.onclick = () => handleFileClick(item);
+      }
+      itemDiv.appendChild(title);
+      if (item.caption && item.caption !== fileName) {
+        const cap = document.createElement("div"); cap.className = "file-caption"; cap.textContent = item.caption;
+        itemDiv.appendChild(cap);
+      }
+      const typeDiv = document.createElement("div"); typeDiv.className = "file-type"; typeDiv.textContent = typeName;
+      itemDiv.appendChild(typeDiv);
+      return itemDiv;
+    }
+
+    function handleFileClick(item) {
+      if (!item.file_id) return;
+      tg?.showAlert ? tg.showAlert("در حال پردازش فایل...") : alert("در حال پردازش فایل...");
+    }
+
+    function renderContents(contents) {
+      const contentDiv = document.getElementById("content"); contentDiv.innerHTML = "";
+      if (!Array.isArray(contents) || contents.length === 0) return;
+      const box = document.createElement("div"); box.className = "content-box";
+      const h3 = document.createElement("h3"); h3.textContent = "📂 محتوای این بخش"; box.appendChild(h3);
+      
+      contents.forEach((item) => {
+        if (item.type === "text") {
+            const t = document.createElement("div"); t.className = "text-item"; t.textContent = item.text || item.content || "";
+            box.appendChild(t);
+        } else {
+            box.appendChild(createFileItem(item));
+        }
+      });
+      contentDiv.appendChild(box);
+    }
+
+    function renderButtons(node) {
+      const buttonsDiv = document.getElementById("buttons"); buttonsDiv.innerHTML = "";
+      (node.rows || []).forEach((rowChildren) => {
+        const row = document.createElement("div"); row.className = "row";
+        rowChildren.forEach((child) => {
+          const button = document.createElement("button"); button.type = "button"; button.className = "btn";
+          applyStyle(button, child.style);
+          button.innerHTML = `<span>${child.name}</span> ${child.content_count ? `<span class="count">${child.content_count} 📎</span>` : ""}`;
+          button.onclick = () => { historyStack.push(node.id); render(child.id); };
+          row.appendChild(button);
+        });
+        buttonsDiv.appendChild(row);
+      });
+      document.getElementById("empty").style.display = ((!node.rows || node.rows.length === 0) && (!node.contents || node.contents.length === 0)) ? "block" : "none";
+    }
+
+    async function render(nodeId) {
+      const empty = document.getElementById("empty");
+      try {
+        empty.style.display = "none";
+        const node = await fetchNode(nodeId);
+        document.getElementById("title").textContent = node.name || "📚 کتابخانه";
+        renderCrumb(node); renderContents(node.contents); renderButtons(node); updateNavButtons(node.id);
+        window.scrollTo(0, 0);
+      } catch (error) {
+        document.getElementById("title").textContent = "خطا"; empty.style.display = "block";
+      }
+    }
+
+    function goBack() { historyStack.length > 0 ? render(historyStack.pop()) : render("root"); }
+    function goTo(nodeId) { nodeId === "root" ? historyStack = [] : ""; render(nodeId); }
+    
+    render("root");
+  </script>
+</body>
+</html>
