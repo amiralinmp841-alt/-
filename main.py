@@ -55,6 +55,16 @@ from telegram.ext import MessageReactionHandler
 from telegram import MessageReactionUpdated
 from miniapp import miniapp_data, miniapp_file
 
+from html_manager import (
+    configure_html_manager,
+    restore_latest_html_backup,
+    build_html_conversation_handler,
+    build_html_callback_handler,
+    build_html_backup_message_handler,
+    get_html_admin_keyboard,
+    html_http_handler,
+)
+
 def delete_node_recursive(db, node_id):
     # اگر نود وجود نداشت
     if node_id not in db:
@@ -105,6 +115,7 @@ if not ADMIN_IDS:
     exit(1)
 
 MINIAPP_URL = os.getenv("MINIAPP_URL", "https://YOUR-APP.onrender.com/miniapp")
+HTML_BACKUP_CHAT_ID = int(os.getenv("HTML_BACKUP_CHAT_ID", "0"))
 
 # فایل دیتابیس
 DB_FILE = "/tmp/database.json"
@@ -1444,10 +1455,12 @@ def get_admin_access_inline_keyboard():
             InlineKeyboardButton("👥 مدیریت کاربران", callback_data="admin_users")
         ],
         [
+            InlineKeyboardButton("🧩 مدیریت HTML", callback_data="html_manage")
+        ],
+        [
             InlineKeyboardButton("📤 دریافت userdata", callback_data="admin_get_userdata"),
             InlineKeyboardButton("📥 وارد کردن userdata", callback_data="admin_import_userdata")
         ],
-        
         [
             InlineKeyboardButton("🕊 ویرایش پیام استارت", callback_data="admin_edit_start_page"),
             InlineKeyboardButton("❌ بستن پنل", callback_data="admin_close")
@@ -6174,7 +6187,6 @@ def build_application():
     application.add_handler(CommandHandler("style", set_custom_layout), group=0)
     application.add_handler(CommandHandler("miniapp", miniapp_command), group=0)
 
-    
     application.add_handler(
         MessageReactionHandler(handle_reaction, message_reaction_types=MessageReactionHandler.MESSAGE_REACTION), 
         group=0
@@ -6183,6 +6195,23 @@ def build_application():
     application.add_handler(
         MessageHandler(filters.TEXT & (~filters.COMMAND), not_started),
         group=0
+    )
+
+# ================= HTML MANAGER =================
+
+    application.add_handler(
+        build_html_conversation_handler(),
+        group=1,
+    )
+    
+    application.add_handler(
+        build_html_callback_handler(),
+        group=1,
+    )
+    
+    application.add_handler(
+        build_html_backup_message_handler(),
+        group=0,
     )
     
     # ادیت پیام
@@ -6329,6 +6358,26 @@ async def webhook_handler(request):
 
 # ================= MAIN ================
 async def main():
+
+    configure_html_manager(
+        admin_ids=ADMIN_IDS,
+        get_userdata=load_userdata,
+        upload_file_to_telegram=upload_file_to_telegram,
+        download_latest_file_from_telegram=download_latest_file_from_telegram,
+        run_telethon=run_telethon,
+        telethon_client=telethon_client,
+    )
+
+    # HTML state: آخرین بکاپ موجود در گروه HTML BACKUP را برگردان
+    try:
+        restored = restore_latest_html_backup()
+        if restored:
+            print("✅ Latest HTML backup restored from Telegram")
+        else:
+            print("ℹ️ No HTML backup restored; local HTML state will be used/created")
+    except Exception as e:
+        print(f"⚠️ HTML startup restore failed: {e}")
+
     tg_app = build_application()
     await tg_app.initialize()
     #await tg_app.start()
@@ -6377,6 +6426,17 @@ async def main():
     webapp.router.add_get(
         "/miniapp-file",
         miniapp_file
+    )
+    # ================= HTML ZIP RENDERER =================
+    
+    webapp.router.add_get(
+        "/html/{zip_id}",
+        html_http_handler,
+    )
+    
+    webapp.router.add_get(
+        "/html/{zip_id}/{path:.*}",
+        html_http_handler,
     )
     
     # ====================
