@@ -119,23 +119,11 @@ def push_admin_history(context, db):
     future.clear()
 
 # ==== ==== ==== بررسی ادمین بودن ==== ==== ==== 
-class AdminFilter(MessageFilter):
-    def filter(self, message: Message) -> bool:
-        # ۱. بررسی اینکه پیام حتماً فرستنده داشته باشد
-        if not message.from_user:
-            return False
-            
-        user_id = message.from_user.id
-        
-        # ۲. خواندن اطلاعات از دیتابیس
-        userdata = load_userdata()
-        
-        # ۳. بررسی شرط ادمین یا ساب‌ادمین بودن
-        is_admin = (user_id in ADMIN_IDS) or (user_id in userdata.get("sub_admins", []))
-        return is_admin
+user_id = update.effective_user.id
+userdata = load_userdata()
+is_admin = (user_id in ADMIN_IDS) or (user_id in userdata.get("sub_admins", []))
+filter_admins = filters.User(user_id=is_admin)
 
-# ساخت یک نمونه از فیلتر برای استفاده در هندلرها
-filter_admins = AdminFilter()
 
 # --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION ---
 
