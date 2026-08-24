@@ -1546,17 +1546,20 @@ def get_day_sort_index(item):
     except ValueError:
         return 99
 
-
 def format_user_full_schedule(data, user_data):
     courses = clean_user_courses(data, user_data)
 
     if not courses:
-        return "هنوز هیچ درسی اضافه نکردی.\n\nاز بخش «درس‌های من» اول درس‌هایت را اضافه کن."
+        return (
+            "هنوز هیچ درسی اضافه نکردی.\n\n"
+            "از بخش «درس‌های من» اول درس‌هایت را اضافه کن."
+        )
 
     schedule_rows = []
 
     for group_id in courses:
         group = data.get("groups", {}).get(group_id)
+
         if not group:
             continue
 
@@ -1566,61 +1569,188 @@ def format_user_full_schedule(data, user_data):
             schedule_rows.append({
                 "course_title": course_title,
                 "schedule": schedule,
+                "group_id": group_id,
             })
 
     if not schedule_rows:
         return "برای درس‌های انتخابی تو هنوز هیچ برنامه‌ای ثبت نشده."
+
+    # -----------------------------------------
+    # تاریخ و زمان فعلی
+    # -----------------------------------------
+
+    now = get_now()
+
+    # شروع هفته جاری = شنبه
+    start_of_week = get_start_of_current_week(now)
+
+    # -----------------------------------------
+    # تبدیل تاریخ میلادی به تاریخ شمسی
+    # -----------------------------------------
+
+    def format_jalali_date(target_date):
+        dt = datetime(
+            target_date.year,
+            target_date.month,
+            target_date.day,
+            tzinfo=TEHRAN_TZ
+        )
+
+        jalali = jdatetime.datetime.fromgregorian(datetime=dt)
+
+        return (
+            f"{to_persian_digits(jalali.day)} "
+            f"{PERSIAN_MONTH_NAMES[jalali.month]} "
+            f"{to_persian_digits(jalali.year)}"
+        )
+
+    # -----------------------------------------
+    # نام روز + تاریخ
+    # -----------------------------------------
+
+    def format_day_with_date(target_date, day_name):
+        return (
+            f"{day_name} "
+            f"{format_jalali_date(target_date)}"
+        )
+
+    # -----------------------------------------
+    # برچسب هفته
+    # -----------------------------------------
 
     def week_label_from_offset(offset):
         if offset == 0:
             return "این هفته"
         elif offset == 1:
             return "هفته بعد"
+        elif offset == 2:
+            return "۲ هفته بعد"
         else:
-            return f"{offset} هفته بعد"
+            return f"{to_persian_digits(offset)} هفته بعد"
+
+    # -----------------------------------------
+    # ساخت ردیف‌ها
+    # -----------------------------------------
 
     expanded_rows = []
 
     for row in schedule_rows:
-        schedule = row["schedule"]
-        mode = schedule.get("mode", "single")
-        offset = int(schedule.get("week_offset", 0))
-        days = schedule.get("days", []) or ["بدون روز"]
 
-        week_entries = []
+        schedule = row["schedule"]
+
+        mode = schedule.get("mode", "single")
+
+        try:
+            offset = int(schedule.get("week_offset", 0))
+        except (TypeError, ValueError):
+            offset = 0
+
+        days = schedule.get("days", []) or []
+
+        if not days:
+            continue
+
+        start_time = schedule.get("start_time")
+
+        if not start_time:
+            continue
+
+        # -------------------------------------
+        # حالت تکرارشونده
+        # -------------------------------------
 
         if mode == "recurring":
-            # در این هفته و هفته بعد و 2 هفته بعد نمایش بده
-            week_entries.extend([
-                (0, "این هفته"),
-                (1, "هفته بعد"),
-                (2, "2 هفته بعد"),
-                (999, "هفته های بعد"),
-            ])
-        else:
-            week_entries.append((offset, week_label_from_offset(offset)))
 
-        for week_order, week_label in week_entries:
-            for day in days:
+            week_offsets = [0, 1, 2]
+
+        # -------------------------------------
+        # حالت یک‌بار مصرف
+        # -------------------------------------
+
+        else:
+
+            week_offsets = [offset]
+
+        # -------------------------------------
+        # ساخت تاریخ واقعی هر جلسه
+        # -------------------------------------
+
+        for week_offset in week_offsets:
+
+            for day_name in days:
+
+                day_idx = get_day_index(day_name)
+
+                if day_idx is None:
+                    continue
+
+                target_date = (
+                    start_of_week
+                    + timedelta(
+                        days=(week_offset * 7 + day_idx)
+                    )
+                )
+
                 expanded_rows.append({
                     "course_title": row["course_title"],
                     "schedule": schedule,
-                    "day": day,
-                    "week_order": week_order,
-                    "week_label": week_label,
+                    "day": day_name,
+                    "date": target_date,
+                    "week_offset": week_offset,
+                    "week_label": week_label_from_offset(
+                        week_offset
+                    ),
                 })
+
+        # -------------------------------------
+        # برای recurring یک خط جدا برای
+        # «هفته‌های بعد» اضافه می‌کنیم
+        # -------------------------------------
+
+        if mode == "recurring":
+
+            for day_name in days:
+
+                day_idx = get_day_index(day_name)
+
+                if day_idx is None:
+                    continue
+
+                expanded_rows.append({
+                    "course_title": row["course_title"],
+                    "schedule": schedule,
+                    "day": day_name,
+                    "date": None,
+                    "week_offset": 999,
+                    "week_label": "هفته‌های بعد",
+                })
+
+    # -----------------------------------------
+    # مرتب‌سازی
+    # -----------------------------------------
 
     expanded_rows.sort(
         key=lambda row: (
-            row["week_order"],
-            ALL_DAYS.index(row["day"]) if row["day"] in ALL_DAYS else 99,
-            row["schedule"].get("start_time", "99:99"),
+            row["week_offset"],
+            (
+                row["date"].toordinal()
+                if row["date"] is not None
+                else 999999999
+            ),
+            row["schedule"].get(
+                "start_time",
+                "99:99"
+            ),
             row["course_title"],
         )
     )
 
+    # -----------------------------------------
+    # خروجی
+    # -----------------------------------------
+
     current_datetime_text = get_current_persian_datetime_text()
-    
+
     lines = [
         "📅 برنامه کل هفتگی من:",
         "",
@@ -1633,27 +1763,61 @@ def format_user_full_schedule(data, user_data):
     current_day = None
 
     for row in expanded_rows:
+
         schedule = row["schedule"]
-        day = row["day"]
+
         week_label = row["week_label"]
 
+        day_name = row["day"]
+
+        target_date = row["date"]
+
+        # -------------------------------------
+        # تغییر هفته
+        # -------------------------------------
+
         if week_label != current_week:
+
             current_week = week_label
             current_day = None
-            lines.append(f"\n📌 {week_label}")
 
-        if day != current_day:
-            current_day = day
-            lines.append(f"🔹 {day}")
+            lines.append("")
+            lines.append(f"📌 {week_label}")
+
+        # -------------------------------------
+        # عنوان روز
+        # -------------------------------------
+
+        if target_date is not None:
+
+            day_text = format_day_with_date(
+                target_date,
+                day_name
+            )
+
+        else:
+
+            day_text = day_name
+
+        if day_text != current_day:
+
+            current_day = day_text
+
+            lines.append(
+                f"🔹 {day_text}"
+            )
+
+        # -------------------------------------
+        # ساعت کلاس
+        # -------------------------------------
 
         class_time = format_schedule_time(schedule)
-        
+
         lines.append(
             f"• {row['course_title']} | ساعت {class_time}"
         )
 
     return "\n".join(lines)
-
 
 async def get_week_alarm_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_week_data()
@@ -2233,9 +2397,11 @@ def combine_date_and_hhmm(target_date, hhmm: str):
 def get_schedule_occurrences(schedule, horizon_weeks=8, now=None):
     now = now or get_now()
     start_of_week = get_start_of_current_week(now)
+
     days = schedule.get("days", []) or []
 
     occurrences = []
+
     mode = schedule.get("mode", "single")
     week_offset = int(schedule.get("week_offset", 0))
     start_time = schedule.get("start_time")
@@ -2244,33 +2410,85 @@ def get_schedule_occurrences(schedule, horizon_weeks=8, now=None):
         return occurrences
 
     for day_name in days:
+
         day_idx = get_day_index(day_name)
+
         if day_idx is None:
             continue
 
         if mode == "single":
-            target_date = start_of_week + timedelta(days=(week_offset * 7 + day_idx))
-            class_dt = combine_date_and_hhmm(target_date, start_time)
+
+            target_date = start_of_week + timedelta(
+                days=(week_offset * 7 + day_idx)
+            )
+
+            class_dt = combine_date_and_hhmm(
+                target_date,
+                start_time
+            )
+
+            jalali = jdatetime.date.fromgregorian(
+                date=target_date
+            )
+
             occurrences.append({
                 "class_datetime": class_dt,
                 "day_name": day_name,
                 "week_offset": week_offset,
                 "mode": mode,
+
+                # تاریخ شمسی واقعی
+                "jalali_year": jalali.year,
+                "jalali_month": jalali.month,
+                "jalali_day": jalali.day,
             })
+
         else:
+
             for offset in range(horizon_weeks):
-                target_date = start_of_week + timedelta(days=(offset * 7 + day_idx))
-                class_dt = combine_date_and_hhmm(target_date, start_time)
+
+                target_date = start_of_week + timedelta(
+                    days=(offset * 7 + day_idx)
+                )
+
+                class_dt = combine_date_and_hhmm(
+                    target_date,
+                    start_time
+                )
+
+                jalali = jdatetime.date.fromgregorian(
+                    date=target_date
+                )
+
                 occurrences.append({
                     "class_datetime": class_dt,
                     "day_name": day_name,
                     "week_offset": offset,
                     "mode": mode,
+
+                    # تاریخ شمسی واقعی
+                    "jalali_year": jalali.year,
+                    "jalali_month": jalali.month,
+                    "jalali_day": jalali.day,
                 })
 
-    occurrences.sort(key=lambda x: x["class_datetime"])
+    occurrences.sort(
+        key=lambda x: x["class_datetime"]
+    )
+
     return occurrences
 
+def format_occurrence_jalali_date(occurrence):
+    month = PERSIAN_MONTH_NAMES.get(
+        occurrence.get("jalali_month"),
+        ""
+    )
+
+    return (
+        f"{to_persian_digits(occurrence.get('jalali_day'))} "
+        f"{month} "
+        f"{to_persian_digits(occurrence.get('jalali_year'))}"
+    )
 
 def build_occurrence_key(group_id, schedule, occurrence):
     schedule_id = schedule.get("id", "noid")
@@ -2308,12 +2526,15 @@ def format_alarm_fire_message(course_title, occurrence, schedule):
 
     class_time = format_schedule_time(schedule)
 
+    jalali_date = format_occurrence_jalali_date(occurrence)
+    
     return (
         "🔔 یادآوری کلاس\n\n"
         f"درس: {course_title}\n"
-        f"روز: {occurrence['day_name']}\n"
-        f"هفته: {week_label}\n"
-        f"ساعت کلاس: {class_time}\n\n"
+        f"📅 تاریخ: {jalali_date}\n"
+        f"📆 روز: {occurrence['day_name']}\n"
+        f"📌 هفته: {week_label}\n"
+        f"🕐 ساعت کلاس: {class_time}\n\n"
         "کلاس شما در این زمان برگزار می‌شود."
     )
 
