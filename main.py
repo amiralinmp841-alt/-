@@ -3289,7 +3289,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await send_start_page(update, context)
     return CHOOSING
+
 # ========= پیام راهنما - /help =============
+
 def get_help_page_edit_inline_keyboard():
     return InlineKeyboardMarkup([
         [
@@ -3303,7 +3305,7 @@ def get_help_page_edit_inline_keyboard():
             )
         ]
     ])
-    def get_help_page_contents():
+def get_help_page_contents():
     userdata = load_userdata()
     return userdata.get("help_page_contents", [])
 
