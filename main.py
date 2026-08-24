@@ -28,7 +28,6 @@ from telegram import (
     MessageReactionUpdated,
     WebAppInfo
 )
-
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
@@ -40,7 +39,6 @@ from telegram.ext import (
     ApplicationHandlerStop,
     MessageReactionHandler
 )
-
 import copy
 from flask import Flask
 import threading
@@ -49,12 +47,12 @@ from aiohttp import web
 import requests
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from smart_search import smart_search
 from html import escape
 from telegram.ext import MessageReactionHandler
 from telegram import MessageReactionUpdated
-from miniapp import miniapp_data, miniapp_file
 
+from miniapp import miniapp_data, miniapp_file
+from smart_search import smart_search
 from html_manager import (
     configure_html_manager,
     restore_latest_html_backup,
@@ -63,6 +61,30 @@ from html_manager import (
     build_html_backup_message_handler,
     get_html_admin_keyboard,
     html_http_handler,
+)
+from weekly_announcements import (
+    set_week_entry,
+    week_callback_handler,
+    receive_week_group_name,
+    receive_week_time_text,
+    receive_week_delete_text,
+    week_cancel,
+    get_week_alarm_entry,
+    user_week_callback_handler,
+    receive_week_alarm_days,
+    receive_week_alarm_time,
+    toggle_week_alarm,
+    WEEK_ROOT,
+    WEEK_WAITING_GROUP_NAME,
+    WEEK_WAITING_ADD_TIME,
+    WEEK_WAITING_DELETE_TIME,
+    WEEK_USER_ROOT,
+    WEEK_WAITING_ALARM_DAYS,
+    WEEK_WAITING_ALARM_TIME,
+    process_weekly_alarm_queue,
+    receive_week_backup_file,
+    WEEK_WAITING_BACKUP_FILE,
+    handle_week_backup_actions,
 )
 
 def delete_node_recursive(db, node_id):
@@ -159,6 +181,7 @@ TG_SESSION_STRING = os.getenv("TG_SESSION_STRING")
 
 DB_BACKUP_CHAT_ID = int(os.getenv("DB_BACKUP_CHAT_ID", "0"))
 USERDATA_BACKUP_CHAT_ID = int(os.getenv("USERDATA_BACKUP_CHAT_ID", "0"))
+ALARM_GROUP_ID = int(os.getenv("ALARM_GROUP_ID", "0") or "0")
 
 ADMIN_ACCESSIBILITY_NAME = os.getenv("ADMIN_ACCESSIBILITY_NAME")
 
@@ -6221,7 +6244,12 @@ def build_application():
     )
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
+        entry_points=[
+            CommandHandler("start", start),
+            CommandHandler("set_week", set_week_entry),
+            CommandHandler("alarm", toggle_week_alarm),
+            CommandHandler("get_week_alarm", get_week_alarm_entry),
+        ],
         states={
             CHOOSING: [
                 CommandHandler("report", report_page),
@@ -6315,6 +6343,60 @@ def build_application():
                 MessageHandler(filters.ALL & (~filters.COMMAND), receive_start_page_content)
             ],
 
+            #  ============= alarm ended ================
+
+            WEEK_ROOT: [
+                CallbackQueryHandler(
+                    handle_week_backup_actions,
+                    pattern=r"^week_backup_(get|upload_prompt|cancel)$"
+                ),
+                CallbackQueryHandler(
+                    week_callback_handler,
+                    pattern=r"^week_"
+                ),
+            ],
+            
+            WEEK_WAITING_GROUP_NAME: [
+                CommandHandler("cancel", week_cancel),
+                MessageHandler(filters.TEXT & (~filters.COMMAND), receive_week_group_name),
+            ],
+            
+            WEEK_WAITING_ADD_TIME: [
+                CommandHandler("cancel", week_cancel),
+                MessageHandler(filters.TEXT & (~filters.COMMAND), receive_week_time_text),
+            ],
+            
+            WEEK_WAITING_DELETE_TIME: [
+                CommandHandler("cancel", week_cancel),
+                MessageHandler(filters.TEXT & (~filters.COMMAND), receive_week_delete_text),
+            ],
+
+            WEEK_USER_ROOT: [
+                CallbackQueryHandler(user_week_callback_handler, pattern=r"^uweek_"),
+            ],
+
+            WEEK_WAITING_ALARM_DAYS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_week_alarm_days),
+            ],
+            WEEK_WAITING_ALARM_TIME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_week_alarm_time),
+            ],
+
+            WEEK_WAITING_BACKUP_FILE: [
+                CallbackQueryHandler(
+                    handle_week_backup_actions,
+                    pattern=r"^week_backup_cancel$"
+                ),
+                MessageHandler(filters.Document.ALL, receive_week_backup_file),
+                MessageHandler(filters.TEXT & (~filters.COMMAND), receive_week_backup_file),
+            ],
+            
+            WAITING_CHAT_MESSAGE: [
+                CommandHandler("cancel", cancel),
+                MessageHandler(filters.ALL & (~filters.COMMAND), receive_chat_message),
+            ],
+            #  ============= alarm ended ================
+
             WAITING_CHAT_MESSAGE: [
                 CommandHandler("cancel", cancel),
                 MessageHandler(filters.ALL & (~filters.COMMAND), receive_chat_message),
@@ -6326,12 +6408,20 @@ def build_application():
             CommandHandler("del", handle_reply_delete),
             CommandHandler("cansel", cancel_report),
             #CommandHandler("clear", clear_favorites_cmd),
+            CommandHandler("cancel", week_cancel),
         ],
         allow_reentry=True,
     )
 
     application.add_handler(conv_handler, group=1)
-
+    
+    application.job_queue.run_repeating(
+        process_weekly_alarm_queue,
+        interval=300,
+        first=10,
+        name="weekly_alarm_queue",
+    )
+    
     return application
 
 # ================= HEALTH & WEBHOOK =================
