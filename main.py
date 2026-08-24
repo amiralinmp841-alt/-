@@ -69,6 +69,7 @@ from weekly_announcements import (
     receive_week_group_name,
     receive_week_time_text,
     receive_week_delete_text,
+    receive_week_edit_group_name,
     week_cancel,
     get_week_alarm_entry,
     user_week_callback_handler,
