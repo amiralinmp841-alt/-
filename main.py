@@ -536,13 +536,6 @@ def is_user_banned(user_id: int) -> bool:
     user_data = userdata.get("users", {}).get(str(user_id), {})
     return bool(user_data.get("banned", False))
 
-# ==== ==== ==== بررسی ادمین بودن ==== ==== ==== 
-user_id = update.effective_user.id
-userdata = load_userdata()
-is_admin = (user_id in ADMIN_IDS) or (user_id in userdata.get("sub_admins", []))
-filter_admins = filters.User(user_id=is_admin)
-
-
 def get_sorted_users_for_management(filter_mode="all"):
     """
     filter_mode:
@@ -6191,6 +6184,12 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return CHOOSING
 
 def build_application():
+    # ==== ==== ==== بررسی ادمین بودن ==== ==== ==== 
+    user_id = update.effective_user.id
+    userdata = load_userdata()
+    is_admin = (user_id in ADMIN_IDS) or (user_id in userdata.get("sub_admins", []))
+    filter_admins = filters.User(user_id=is_admin)
+    
     application = ApplicationBuilder().token(TOKEN).build()
 
     application.add_handler(
