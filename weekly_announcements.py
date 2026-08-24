@@ -1879,13 +1879,11 @@ def format_user_full_schedule(data, user_data):
                 lines.append("")
 
                 # اگر تاریخ در همین هفته است
-                if (
-                    week_start == start_of_week.date()
-                ):
+                if week_start == start_of_week:
                     week_title = "این هفته"
                 elif (
                     week_start
-                    == (start_of_week + timedelta(days=7)).date()
+                    == (start_of_week + timedelta(days=7))
                 ):
                     week_title = "هفته بعد"
                 else:
