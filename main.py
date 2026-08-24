@@ -6247,9 +6247,9 @@ def build_application():
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
-            CommandHandler("set_week", set_week_entry),
+            CommandHandler("set_alarm", set_week_entry),
             CommandHandler("alarm", toggle_week_alarm),
-            CommandHandler("get_week_alarm", get_week_alarm_entry),
+            CommandHandler("get_alarm", get_week_alarm_entry),
         ],
         states={
             CHOOSING: [
