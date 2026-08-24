@@ -15,6 +15,7 @@ WEEK_ROOT = "week_root"
 WEEK_WAITING_GROUP_NAME = "week_waiting_group_name"
 WEEK_WAITING_ADD_TIME = "week_waiting_add_time"
 WEEK_WAITING_DELETE_TIME = "week_waiting_delete_time"
+WEEK_WAITING_EDIT_GROUP_NAME = "week_waiting_edit_group_name"
 TEHRAN_TZ = ZoneInfo("Asia/Tehran")
 
 PERSIAN_DAY_ALIASES = {
@@ -669,11 +670,26 @@ def build_group_keyboard(data, group_id):
 
     keyboard = [
         [
-            InlineKeyboardButton("➕ افزودن زیرگروه", callback_data=f"week_add_group_child:{group_id}"),
-            InlineKeyboardButton("➖ حذف همین گروه", callback_data=f"week_delete_group:{group_id}"),
+            InlineKeyboardButton(
+                "➕ افزودن زیرگروه",
+                callback_data=f"week_add_group_child:{group_id}"
+            ),
         ],
         [
-            InlineKeyboardButton("⏰ تعیین تایم", callback_data=f"week_time_menu:{group_id}")
+            InlineKeyboardButton(
+                "✏️ ویرایش نام",
+                callback_data=f"week_edit_group_name:{group_id}"
+            ),
+            InlineKeyboardButton(
+                "➖ حذف همین گروه",
+                callback_data=f"week_delete_group:{group_id}"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                "⏰ تعیین تایم",
+                callback_data=f"week_time_menu:{group_id}"
+            )
         ],
     ]
 
@@ -771,6 +787,64 @@ async def set_week_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("week_parent_for_new_group", None)
     return WEEK_ROOT
 
+async def receive_week_edit_group_name(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    group_id = context.user_data.get(
+        "week_target_group"
+    )
+
+    if not group_id:
+        await update.message.reply_text(
+            "❌ گروه مقصد مشخص نیست. دوباره /set_alarm را بزنید."
+        )
+        return ConversationHandler.END
+
+    new_name = (update.message.text or "").strip()
+
+    if not new_name:
+        await update.message.reply_text(
+            "❌ نام گروه نمی‌تواند خالی باشد.\n\n"
+            "لطفاً نام جدید را ارسال کنید."
+        )
+        return WEEK_WAITING_EDIT_GROUP_NAME
+
+    data = load_week_data()
+
+    group_data = data.get(
+        "groups",
+        {}
+    ).get(group_id)
+
+    if not group_data:
+        await update.message.reply_text(
+            "❌ گروه پیدا نشد. دوباره /set_alarm را بزنید."
+        )
+        return ConversationHandler.END
+
+    old_name = group_data.get(
+        "title",
+        "بدون نام"
+    )
+
+    group_data["title"] = new_name
+
+    save_week_data(data)
+
+    await update.message.reply_text(
+        f"✅ نام گروه با موفقیت تغییر کرد.\n\n"
+        f"نام قبلی: «{old_name}»\n"
+        f"نام جدید: «{new_name}»",
+        reply_markup=build_group_keyboard(
+            data,
+            group_id
+        ),
+    )
+
+    context.user_data["week_state"] = WEEK_ROOT
+
+    return WEEK_ROOT
 
 async def week_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -864,6 +938,36 @@ async def week_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data["week_state"] = WEEK_ROOT
         return WEEK_ROOT
 
+    if callback.startswith("week_edit_group_name:"):
+    
+        group_id = callback.split(":", 1)[1]
+    
+        group_data = data.get("groups", {}).get(group_id)
+    
+        if not group_data:
+            await query.answer(
+                "گروه پیدا نشد.",
+                show_alert=True
+            )
+            return WEEK_ROOT
+    
+        context.user_data["week_target_group"] = group_id
+        context.user_data["week_state"] = WEEK_WAITING_EDIT_GROUP_NAME
+    
+        current_title = group_data.get(
+            "title",
+            "بدون نام"
+        )
+    
+        await query.message.reply_text(
+            f"✏️ نام فعلی گروه:\n"
+            f"«{current_title}»\n\n"
+            f"نام جدید را ارسال کنید.\n\n"
+            f"برای لغو: /cancel"
+        )
+    
+        return WEEK_WAITING_EDIT_GROUP_NAME
+    
     if callback.startswith("week_delete_group:"):
         group_id = callback.split(":", 1)[1]
         group = data.get("groups", {}).get(group_id)
