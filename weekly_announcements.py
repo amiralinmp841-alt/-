@@ -784,7 +784,8 @@ async def set_week_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     userdata = load_userdata()
     is_admin = (user_id in ADMIN_IDS) or (user_id in userdata.get("sub_admins", []))
-
+    if not is_admin:
+        return
     data = load_week_data()
     await update.message.reply_text(
         "📅 پنل اعلان هفتگی\n\nیکی از گزینه‌ها را انتخاب کنید.",
