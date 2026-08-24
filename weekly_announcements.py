@@ -10,6 +10,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, ConversationHandler
 
 WEEK_FILE = "/tmp/week.json"
+ADMIN_IDS = []
+if os.getenv("ADMIN_IDS"):
+    ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS").split(",")))
 
 WEEK_ROOT = "week_root"
 WEEK_WAITING_GROUP_NAME = "week_waiting_group_name"
@@ -777,6 +780,11 @@ def delete_group_recursive(data, group_id):
 
 
 async def set_week_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from main import load_userdata
+    user_id = update.effective_user.id
+    userdata = load_userdata()
+    is_admin = (user_id in ADMIN_IDS) or (user_id in userdata.get("sub_admins", []))
+
     data = load_week_data()
     await update.message.reply_text(
         "📅 پنل اعلان هفتگی\n\nیکی از گزینه‌ها را انتخاب کنید.",
