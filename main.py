@@ -26,7 +26,8 @@ from telegram import (
     InputMediaDocument,
     InputMediaAudio,
     MessageReactionUpdated,
-    WebAppInfo
+    WebAppInfo,
+    Message
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -37,7 +38,8 @@ from telegram.ext import (
     filters,
     ConversationHandler,
     ApplicationHandlerStop,
-    MessageReactionHandler
+    MessageReactionHandler,
+    MessageFilter
 )
 import copy
 from flask import Flask
