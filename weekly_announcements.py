@@ -1953,6 +1953,22 @@ def format_user_full_schedule(data, user_data):
 
     return "\n".join(lines)
 
+async def get_week_alarm_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = load_week_data()
+    ensure_week_users_shape(data)
+
+    user_id = get_week_user_id(update)
+    ensure_user_week_data(data, user_id)
+
+    save_week_data(data)
+
+    await update.message.reply_text(
+        get_week_panel_root_text(),
+        reply_markup=build_user_week_root_keyboard(),
+    )
+
+    return WEEK_USER_ROOT
+
 
 async def user_week_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
