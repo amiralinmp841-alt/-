@@ -1890,7 +1890,7 @@ async def process_weekly_alarm_queue(context: ContextTypes.DEFAULT_TYPE):
                     class_dt = occurrence["class_datetime"]
                     alarm_dt = compute_alarm_datetime(class_dt, alarm_config)
 
-                    if alarm_dt <= now < class_dt + timedelta(minutes=1):
+                    if alarm_dt <= now < class_dt:
                         sent = await send_alarm_for_occurrence(
                             context.bot,
                             data,
