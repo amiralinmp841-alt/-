@@ -2688,21 +2688,34 @@ def get_schedule_occurrences(schedule, horizon_weeks=8, now=None):
                     start_time
                 )
 
+                # تبدیل تاریخ میلادی به نام روز هفته
+                day_names = [
+                    "دوشنبه",
+                    "سه شنبه",
+                    "چهارشنبه",
+                    "پنج شنبه",
+                    "جمعه",
+                    "شنبه",
+                    "یک شنبه",
+                ]
+                
+                day_name = day_names[target_date.weekday()]
+                
                 occurrences.append({
                     "class_datetime": class_dt,
-
-                    "day_name": None,
-
+                
+                    # روز واقعی هفته برای تاریخ مشخص
+                    "day_name": day_name,
+                
                     "week_offset": 0,
-
+                
                     "mode": "specific_date",
-
+                
                     # تاریخ شمسی واقعی
                     "jalali_year": jalali_year,
                     "jalali_month": jalali_month,
                     "jalali_day": jalali_day,
-
-                    # برای اطمینان
+                
                     "date": date_text,
                 })
 
