@@ -2629,12 +2629,9 @@ def combine_date_and_hhmm(target_date, hhmm: str):
         hour, minute, tzinfo=TEHRAN_TZ
     )
 
-
 def get_schedule_occurrences(schedule, horizon_weeks=8, now=None):
     now = now or get_now()
     start_of_week = get_start_of_current_week(now)
-
-    days = schedule.get("days", []) or []
 
     occurrences = []
 
@@ -2644,6 +2641,77 @@ def get_schedule_occurrences(schedule, horizon_weeks=8, now=None):
 
     if not start_time:
         return occurrences
+
+    # =========================================================
+    # 📆 تاریخ‌های مشخص
+    # =========================================================
+    if mode == "specific_date":
+
+        for date_text in schedule.get("dates", []):
+
+            try:
+                # ---------------------------------------------
+                # تاریخ ذخیره‌شده:
+                # 1405-06-07
+                # ---------------------------------------------
+                parts = date_text.split("-")
+
+                if len(parts) != 3:
+                    continue
+
+                jalali_year = int(parts[0])
+                jalali_month = int(parts[1])
+                jalali_day = int(parts[2])
+
+                # تبدیل شمسی → میلادی
+                jalali_date = jdatetime.date(
+                    jalali_year,
+                    jalali_month,
+                    jalali_day
+                )
+
+                gregorian_date = jalali_date.togregorian()
+
+                target_date = gregorian_date
+
+                # ساخت datetime با ساعت کلاس
+                class_dt = combine_date_and_hhmm(
+                    target_date,
+                    start_time
+                )
+
+                occurrences.append({
+                    "class_datetime": class_dt,
+
+                    "day_name": None,
+
+                    "week_offset": 0,
+
+                    "mode": "specific_date",
+
+                    # تاریخ شمسی واقعی
+                    "jalali_year": jalali_year,
+                    "jalali_month": jalali_month,
+                    "jalali_day": jalali_day,
+
+                    # برای اطمینان
+                    "date": date_text,
+                })
+
+            except (ValueError, TypeError):
+                continue
+
+        occurrences.sort(
+            key=lambda x: x["class_datetime"]
+        )
+
+        return occurrences
+
+    # =========================================================
+    # 📅 برنامه‌های هفتگی
+    # =========================================================
+
+    days = schedule.get("days", []) or []
 
     for day_name in days:
 
@@ -2673,7 +2741,6 @@ def get_schedule_occurrences(schedule, horizon_weeks=8, now=None):
                 "week_offset": week_offset,
                 "mode": mode,
 
-                # تاریخ شمسی واقعی
                 "jalali_year": jalali.year,
                 "jalali_month": jalali.month,
                 "jalali_day": jalali.day,
@@ -2702,7 +2769,6 @@ def get_schedule_occurrences(schedule, horizon_weeks=8, now=None):
                     "week_offset": offset,
                     "mode": mode,
 
-                    # تاریخ شمسی واقعی
                     "jalali_year": jalali.year,
                     "jalali_month": jalali.month,
                     "jalali_day": jalali.day,
