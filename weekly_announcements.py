@@ -1308,7 +1308,7 @@ async def get_week_alarm_entry(update: Update, context: ContextTypes.DEFAULT_TYP
     save_week_data(data)
 
     await update.message.reply_text(
-        "⏰ پنل برنامه هفتگی\n\nیکی از گزینه‌ها را انتخاب کن:",
+        get_week_panel_root_text(),
         reply_markup=build_user_week_root_keyboard(),
     )
 
@@ -1335,7 +1335,7 @@ async def user_week_callback_handler(update: Update, context: ContextTypes.DEFAU
     if callback == "uweek_back_root":
         #save_week_data(data)
         await query.edit_message_text(
-            "⏰ پنل برنامه هفتگی\n\nیکی از گزینه‌ها را انتخاب کن:",
+            get_week_panel_root_text(),
             reply_markup=build_user_week_root_keyboard(),
         )
         return WEEK_USER_ROOT
@@ -1829,6 +1829,16 @@ def get_current_persian_datetime_text():
         f"🕐 ساعت الان: "
         f"{to_persian_digits(now.strftime('%H:%M:%S'))}"
     )
+def get_week_panel_root_text():
+    current_datetime_text = get_current_persian_datetime_text()
+
+    return (
+        "⏰ پنل برنامه هفتگی\n\n"
+        f"{current_datetime_text}\n\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        "یکی از گزینه‌ها را انتخاب کن:"
+    )
+    
 def get_day_index(day_name: str):
     try:
         return ALL_DAYS.index(day_name)
