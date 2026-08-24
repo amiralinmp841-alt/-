@@ -39,7 +39,6 @@ from telegram.ext import (
     ConversationHandler,
     ApplicationHandlerStop,
     MessageReactionHandler,
-    MessageFilter
 )
 import copy
 from flask import Flask
@@ -117,12 +116,6 @@ def push_admin_history(context, db):
 
     # وقتی تغییر جدید داریم، redo باطل می‌شود
     future.clear()
-
-# ==== ==== ==== بررسی ادمین بودن ==== ==== ==== 
-user_id = update.effective_user.id
-userdata = load_userdata()
-is_admin = (user_id in ADMIN_IDS) or (user_id in userdata.get("sub_admins", []))
-filter_admins = filters.User(user_id=is_admin)
 
 
 # --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION ---
@@ -542,6 +535,12 @@ def is_user_banned(user_id: int) -> bool:
     userdata = load_userdata()
     user_data = userdata.get("users", {}).get(str(user_id), {})
     return bool(user_data.get("banned", False))
+
+# ==== ==== ==== بررسی ادمین بودن ==== ==== ==== 
+user_id = update.effective_user.id
+userdata = load_userdata()
+is_admin = (user_id in ADMIN_IDS) or (user_id in userdata.get("sub_admins", []))
+filter_admins = filters.User(user_id=is_admin)
 
 
 def get_sorted_users_for_management(filter_mode="all"):
