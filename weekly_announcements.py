@@ -45,18 +45,6 @@ ALL_DAYS = [
     "جمعه",
 ]
 
-def normalize_schedule_text(text: str) -> str:
-    text = (text or "").strip()
-    text = text.replace("ي", "ی").replace("ك", "ک")
-    text = text.replace("‌", " ")
-    text = text.replace("…", "...")
-    text = text.replace("تا", " تا ")
-    text = text.replace("-", " - ")
-    text = text.replace("—", " - ")
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\s*\.\.\.\s*", " ... ", text)
-    return text.strip()
-
 
 def normalize_day_name(day_text: str):
     day_text = normalize_schedule_text(day_text)
@@ -161,6 +149,31 @@ def parse_week_part(week_text: str):
 
     return None
 
+PERSIAN_TO_ENGLISH_DIGITS = str.maketrans({
+    "۰": "0",
+    "۱": "1",
+    "۲": "2",
+    "۳": "3",
+    "۴": "4",
+    "۵": "5",
+    "۶": "6",
+    "۷": "7",
+    "۸": "8",
+    "۹": "9",
+
+    "٠": "0",
+    "١": "1",
+    "٢": "2",
+    "٣": "3",
+    "٤": "4",
+    "٥": "5",
+    "٦": "6",
+    "٧": "7",
+    "٨": "8",
+    "٩": "9",
+})
+
+
 def normalize_digits(text: str) -> str:
     return (text or "").translate(PERSIAN_TO_ENGLISH_DIGITS)
 
@@ -170,27 +183,24 @@ def normalize_schedule_text(text: str) -> str:
 
     text = (text or "").strip()
 
+    # حروف عربی به فارسی
     text = text.replace("ي", "ی").replace("ك", "ک")
+
+    # نیم‌فاصله
     text = text.replace("‌", " ")
+
+    # سه‌نقطه
+    text = text.replace("…", "...")
 
     # انواع خط تیره
     text = text.replace("–", "-")
     text = text.replace("—", "-")
 
-    # جداکننده‌های مختلف
-    text = text.replace("،", " ")
-    text = text.replace(",", " ")
-    text = text.replace("؛", " ")
-    text = text.replace("...", " ")
-
-    # الی را هم مثل تا در نظر بگیر
-    text = re.sub(r"\bالی\b", " تا ", text)
-
-    # فاصله‌گذاری
+    # فاصله‌های استاندارد
     text = re.sub(r"\s+", " ", text)
 
     return text.strip()
-
+    
 def normalize_time_value(value: str):
     value = normalize_digits(value).strip()
 
