@@ -170,8 +170,9 @@ logging.basicConfig(
     WAITING_PICK_USER_FOR_MSG,
     WAITING_CHAT_MESSAGE, 
     WAITING_REPORT_TEXT,
-    WAITING_START_PAGE_CONTENT
-) = range(17)
+    WAITING_START_PAGE_CONTENT,
+    WAITING_HELP_PAGE_CONTENT,
+) = range(18)
 
 # ============ TELEGRAM USER API BACKUP CONFIG ============
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
@@ -1484,12 +1485,30 @@ def get_admin_access_inline_keyboard():
             InlineKeyboardButton("🧩 مدیریت HTML", callback_data="html_manage")
         ],
         [
-            InlineKeyboardButton("📤 دریافت userdata", callback_data="admin_get_userdata"),
-            InlineKeyboardButton("📥 وارد کردن userdata", callback_data="admin_import_userdata")
+            InlineKeyboardButton(
+                "📤 دریافت userdata",
+                callback_data="admin_get_userdata"
+            ),
+            InlineKeyboardButton(
+                "📥 وارد کردن userdata",
+                callback_data="admin_import_userdata"
+            )
         ],
         [
-            InlineKeyboardButton("🕊 ویرایش پیام استارت", callback_data="admin_edit_start_page"),
-            InlineKeyboardButton("❌ بستن پنل", callback_data="admin_close")
+            InlineKeyboardButton(
+                "🕊 ویرایش پیام استارت",
+                callback_data="admin_edit_start_page"
+            ),
+            InlineKeyboardButton(
+                "❓ ویرایش پیام راهنما",
+                callback_data="admin_edit_help_page"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "❌ بستن پنل",
+                callback_data="admin_close"
+            )
         ]
     ])
 
@@ -3263,6 +3282,172 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await send_start_page(update, context)
     return CHOOSING
+# ========= پیام راهنما - /help =============
+def get_help_page_edit_inline_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "✅ ثبت",
+                callback_data="admin_save_help_page"
+            ),
+            InlineKeyboardButton(
+                "❌ لغو",
+                callback_data="admin_cancel_help_page"
+            )
+        ]
+    ])
+    def get_help_page_contents():
+    userdata = load_userdata()
+    return userdata.get("help_page_contents", [])
+
+
+def save_help_page_contents(contents):
+    userdata = load_userdata()
+    userdata["help_page_contents"] = contents
+    save_userdata(userdata)
+
+async def receive_help_page_content(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if "help_page_buffer" not in context.user_data:
+        context.user_data["help_page_buffer"] = []
+
+    item = extract_message_content(update.message)
+
+    if not item:
+        await update.message.reply_text(
+            "⚠️ این نوع پیام پشتیبانی نمی‌شود.\n"
+            "فقط متن، عکس، ویدیو، فایل، صوت و ویس بفرستید.",
+            reply_markup=get_help_page_edit_inline_keyboard()
+        )
+        return WAITING_HELP_PAGE_CONTENT
+
+    context.user_data["help_page_buffer"].append(item)
+
+    await update.message.reply_text(
+        "📥 دریافت شد.\n"
+        "اگر محتوای دیگری هم دارید بفرستید، "
+        "وگرنه روی «✅ ثبت» بزنید.",
+        reply_markup=get_help_page_edit_inline_keyboard()
+    )
+
+    return WAITING_HELP_PAGE_CONTENT
+
+async def send_help_page(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    userdata = load_userdata()
+
+    contents = userdata.get(
+        "help_page_contents",
+        []
+    )
+
+    # اگر راهنما هنوز تنظیم نشده
+    if not contents:
+        await update.message.reply_text(
+            DEFAULT_HELP_TEXT,
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
+        return
+
+    valid_items = [
+        item
+        for item in contents
+        if item.get("type") in (
+            "text",
+            "photo",
+            "video",
+            "document",
+            "audio",
+            "voice"
+        )
+    ]
+
+    if not valid_items:
+        await update.message.reply_text(
+            DEFAULT_HELP_TEXT,
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
+        return
+
+    for item in valid_items:
+        try:
+            msg_type = item["type"]
+            saved_entities = item.get("entities")
+
+            if msg_type == "text":
+
+                kwargs = {
+                    "disable_web_page_preview": True
+                }
+
+                if saved_entities is not None:
+                    kwargs["entities"] = saved_entities
+
+                    await update.message.reply_text(
+                        text=item["text"],
+                        **kwargs
+                    )
+                else:
+                    kwargs["parse_mode"] = "HTML"
+
+                    await update.message.reply_text(
+                        text=item["text"],
+                        **kwargs
+                    )
+
+            else:
+                file_id = item["file_id"]
+                caption = item.get("caption", "")
+
+                send_args = {
+                    "caption": caption
+                }
+
+                if saved_entities is not None:
+                    send_args["caption_entities"] = saved_entities
+                else:
+                    send_args["parse_mode"] = "HTML"
+
+                if msg_type == "photo":
+                    await update.message.reply_photo(
+                        photo=file_id,
+                        **send_args
+                    )
+
+                elif msg_type == "video":
+                    await update.message.reply_video(
+                        video=file_id,
+                        **send_args
+                    )
+
+                elif msg_type == "document":
+                    await update.message.reply_document(
+                        document=file_id,
+                        **send_args
+                    )
+
+                elif msg_type == "audio":
+                    await update.message.reply_audio(
+                        audio=file_id,
+                        **send_args
+                    )
+
+                elif msg_type == "voice":
+                    await update.message.reply_voice(
+                        voice=file_id,
+                        **send_args
+                    )
+
+        except Exception as e:
+            logging.error(
+                f"Error sending help page content: {e}"
+            )
 
 # ========= خارج کردن پیام start  از هاردکد==============
 
@@ -3418,6 +3603,63 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return CHOOSING
 
+    # --------------- پیام راهنما ----------------
+    
+    if data == "admin_edit_help_page":
+        context.user_data["help_page_buffer"] = []
+        context.user_data["admin_panel"] = "edit_help_page"
+    
+        await query.message.reply_text(
+            "❓ محتوای جدید پیام راهنما را بفرستید.\n"
+            "می‌توانید چند پیام، عکس، ویدیو، فایل، صوت یا ویس بفرستید.\n"
+            "وقتی تمام شد، روی «✅ ثبت» بزنید.\n"
+            "اگر منصرف شدید، روی «❌ لغو» بزنید.",
+            reply_markup=get_help_page_edit_inline_keyboard()
+        )
+    
+        return WAITING_HELP_PAGE_CONTENT
+    
+    if data == "admin_save_help_page":
+        buffer = context.user_data.get("help_page_buffer", [])
+    
+        if not buffer:
+            await query.answer(
+                "⚠️ هنوز هیچ محتوایی ارسال نشده.",
+                show_alert=True
+            )
+            return WAITING_HELP_PAGE_CONTENT
+    
+        save_help_page_contents(buffer)
+    
+        context.user_data.pop("help_page_buffer", None)
+        context.user_data["admin_panel"] = "access"
+    
+        await query.message.reply_text(
+            "✅ پیام راهنما با موفقیت به‌روزرسانی شد."
+        )
+    
+        await query.message.reply_text(
+            "🔐 پنل مدیریت:",
+            reply_markup=get_admin_access_inline_keyboard()
+        )
+    
+        return CHOOSING
+    
+    if data == "admin_cancel_help_page":
+        context.user_data.pop("help_page_buffer", None)
+        context.user_data["admin_panel"] = "access"
+    
+        await query.message.reply_text(
+            "❌ ویرایش پیام راهنما لغو شد."
+        )
+    
+        await query.message.reply_text(
+            "🔐 پنل مدیریت:",
+            reply_markup=get_admin_access_inline_keyboard()
+        )
+    
+        return CHOOSING
+    
     # ---------------  پیام استارت ----------------
     if data == "admin_edit_start_page":
         context.user_data["start_page_buffer"] = []
@@ -6212,6 +6454,7 @@ def build_application():
     application.add_handler(CommandHandler("6", set_row_count), group=0)
     application.add_handler(CommandHandler("style", set_custom_layout), group=0)
     application.add_handler(CommandHandler("miniapp", miniapp_command), group=0)
+    application.add_handler(CommandHandler("help", send_help_page), group=0)
 
     application.add_handler(
         MessageReactionHandler(handle_reaction, message_reaction_types=MessageReactionHandler.MESSAGE_REACTION), 
@@ -6345,7 +6588,20 @@ def build_application():
                 CallbackQueryHandler(inline_handler, pattern="^admin_cancel_start_page$"),
                 MessageHandler(filters.ALL & (~filters.COMMAND), receive_start_page_content)
             ],
-
+            WAITING_HELP_PAGE_CONTENT: [
+                CallbackQueryHandler(
+                    inline_handler,
+                    pattern=r"^admin_save_help_page$"
+                ),
+                CallbackQueryHandler(
+                    inline_handler,
+                    pattern=r"^admin_cancel_help_page$"
+                ),
+                MessageHandler(
+                    filters.ALL & (~filters.COMMAND),
+                    receive_help_page_content
+                )
+            ],
             #  ============= alarm ==== ================
 
             WEEK_ROOT: [
