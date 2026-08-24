@@ -34,7 +34,20 @@ PERSIAN_DAY_ALIASES = {
     "پنج شنبه": "پنج شنبه",
     "جمعه": "جمعه",
 }
-
+PERSIAN_MONTHS = {
+    "فروردین": 1,
+    "اردیبهشت": 2,
+    "خرداد": 3,
+    "تیر": 4,
+    "مرداد": 5,
+    "شهریور": 6,
+    "مهر": 7,
+    "آبان": 8,
+    "آذر": 9,
+    "دی": 10,
+    "بهمن": 11,
+    "اسفند": 12,
+}
 ALL_DAYS = [
     "شنبه",
     "یک شنبه",
@@ -85,7 +98,90 @@ def parse_days_part(days_text: str):
             remaining = re.sub(pattern, " ", remaining)
 
     return result
+def parse_specific_dates_part(text: str):
+    text = normalize_schedule_text(text)
 
+    # مثال:
+    # 9 فروردین
+    # 9 و 10 فروردین
+    # 9، 10 و 12 فروردین
+    # 9 و 10 فروردین 1405
+
+    month_pattern = "|".join(
+        re.escape(month)
+        for month in PERSIAN_MONTHS.keys()
+    )
+
+    pattern = rf"""
+        ((?:\d{{1,2}}\s*(?:و|،|,)?\s*)+)
+        ({month_pattern})
+        (?:\s*(\d{{4}}))?
+    """
+
+    match = re.search(pattern, text, flags=re.VERBOSE)
+
+    if not match:
+        return None
+
+    days_text = match.group(1)
+    month_name = match.group(2)
+    year_text = match.group(3)
+
+    month = PERSIAN_MONTHS[month_name]
+
+    # استخراج روزها
+    day_numbers = [
+        int(x)
+        for x in re.findall(r"\d{1,2}", days_text)
+    ]
+
+    if not day_numbers:
+        return None
+
+    # اگر سال گفته نشده، سال فعلی شمسی را در نظر می‌گیریم
+    now_jalali = jdatetime.datetime.now()
+    if year_text:
+        year = int(year_text)
+    else:
+        year = now_jalali.year
+
+        # تاریخ بدون سال است.
+        # اگر تاریخ امسال گذشته باشد، سال بعد را انتخاب کن.
+        try:
+            candidate = jdatetime.date(year, month, min(day_numbers))
+            today = jdatetime.date(
+                now_jalali.year,
+                now_jalali.month,
+                now_jalali.day
+            )
+
+            if candidate < today:
+                year += 1
+
+        except ValueError:
+            return None
+
+    # اعتبارسنجی
+    result = []
+
+    for day in day_numbers:
+        try:
+            jdate = jdatetime.date(year, month, day)
+
+            result.append(
+                f"{jdate.year:04d}-{jdate.month:02d}-{jdate.day:02d}"
+            )
+
+        except ValueError:
+            return None
+
+    return {
+        "dates": result,
+        "year": year,
+        "month": month,
+        "month_name": month_name,
+        "days": day_numbers,
+    }
 
 def canonical_week_label(mode: str, week_offset: int):
     if mode == "recurring":
@@ -231,10 +327,12 @@ def normalize_time_value(value: str):
 def parse_time_part(time_text: str):
     time_text = normalize_schedule_text(time_text)
 
+    # --------------------------------
     # حالت بازه:
     # 8 تا 10
+    # 8:30 تا 10:45
     # 08:30-10:45
-    # از ساعت 8 تا 10
+    # --------------------------------
     range_pattern = (
         r"(?:از\s*)?"
         r"(?:ساعت\s*)?"
@@ -255,10 +353,14 @@ def parse_time_part(time_text: str):
                 "end_time": end_time,
             }
 
-    # حالت فقط ساعت شروع:
-    # ساعت 8
+    # --------------------------------
+    # حالت تک‌ساعت:
+    #
     # 8
+    # ساعت 8
     # از ساعت 8
+    # 8:30
+    # --------------------------------
     single_pattern = (
         r"(?:از\s*)?"
         r"(?:ساعت\s*)?"
@@ -318,6 +420,49 @@ def parse_schedule_line(line: str):
     )
 
     line_without_time = normalize_schedule_text(line_without_time)
+
+    # -----------------------------
+    # 2) تشخیص تاریخ مشخص
+    # -----------------------------
+    specific_date_info = parse_specific_dates_part(raw_line)
+
+    if specific_date_info:
+
+        if time_info["end_time"]:
+            time_text = (
+                f"ساعت {time_info['start_time']} "
+                f"تا {time_info['end_time']}"
+            )
+        else:
+            time_text = f"ساعت {time_info['start_time']}"
+
+        dates_text = " و ".join(
+            f"{day} {specific_date_info['month_name']}"
+            for day in specific_date_info["days"]
+        )
+
+        canonical_raw = (
+            f"{dates_text} ... {time_text}"
+        )
+
+        return {
+            "id": str(uuid.uuid4()),
+            "raw": raw_line,
+            "canonical_raw": canonical_raw,
+
+            "mode": "specific_date",
+
+            "week_offset": 0,
+            "week_label": None,
+
+            "days": [],
+            "dates": specific_date_info["dates"],
+
+            "start_time": time_info["start_time"],
+            "end_time": time_info["end_time"],
+
+            "created_at": get_now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
 
     # -----------------------------
     # 2) تشخیص هفته
@@ -409,17 +554,43 @@ def parse_schedule_line(line: str):
         "created_at": get_now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
+def format_schedule_time(schedule):
+    start_time = schedule.get("start_time")
+
+    if not start_time:
+        return "--:--"
+
+    end_time = schedule.get("end_time")
+
+    if end_time:
+        return f"{start_time} تا {end_time}"
+
+    return start_time
 
 def is_duplicate_schedule(existing_items, new_item):
     for item in existing_items:
-        if (
-            item.get("mode") == new_item.get("mode")
-            and int(item.get("week_offset", 0)) == int(new_item.get("week_offset", 0))
-            and item.get("days", []) == new_item.get("days", [])
-            and item.get("start_time") == new_item.get("start_time")
-            and item.get("end_time") == new_item.get("end_time")
-        ):
-            return True
+
+        if item.get("mode") != new_item.get("mode"):
+            continue
+
+        if item.get("mode") == "specific_date":
+            if (
+                item.get("dates", []) == new_item.get("dates", [])
+                and item.get("start_time") == new_item.get("start_time")
+                and item.get("end_time") == new_item.get("end_time")
+            ):
+                return True
+
+        else:
+            if (
+                int(item.get("week_offset", 0))
+                == int(new_item.get("week_offset", 0))
+                and item.get("days", []) == new_item.get("days", [])
+                and item.get("start_time") == new_item.get("start_time")
+                and item.get("end_time") == new_item.get("end_time")
+            ):
+                return True
+
     return False
 
 
@@ -774,18 +945,30 @@ async def week_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await query.message.reply_text(
             "⏰ تایم جدید را با هر ترتیب راحتی وارد کن.\n\n"
         
-            "فقط باید شامل این ۳ مورد باشد:\n"
-            "📅 هفته\n"
-            "📆 روز یا روزها\n"
-            "🕐 ساعت شروع و پایان\n\n"
+            "می‌توانی به دو شکل برنامه ثبت کنی:\n\n"
         
-            "مثال‌ها:\n\n"
+            "📅 برنامه هفتگی:\n"
+            "• هفته\n"
+            "• روز یا روزها\n"
+            "• ساعت\n\n"
         
+            "📆 تاریخ مشخص:\n"
+            "• روز و ماه\n"
+            "• ساعت\n\n"
+        
+            "مثال‌های هفتگی:\n"
             "شنبه این هفته 18 تا 20\n"
             "این هفته شنبه ساعت 18:00-20:00\n"
             "هر هفته شنبه و دوشنبه 8 تا 10\n"
-            "۲ هفته بعد جمعه 10:30 تا 12\n"
-            "از این هفته به بعد سه شنبه 14 تا 16\n\n"
+            "۲ هفته بعد جمعه 10:30 تا 12\n\n"
+        
+            "مثال‌های تاریخ مشخص:\n"
+            "9 فروردین ساعت 8\n"
+            "9 و 10 فروردین ساعت 8\n"
+            "9، 10 و 12 فروردین ساعت 08:30\n"
+            "9 و 10 فروردین ساعت 8 تا 10\n"
+            "15 اردیبهشت ساعت 14\n"
+            "9 فروردین 1406 ساعت 10\n\n"
         
             "می‌توانی چند برنامه را هم در چند خط بفرستی.\n"
             "برای لغو: /cancel"
@@ -1463,11 +1646,10 @@ def format_user_full_schedule(data, user_data):
             current_day = day
             lines.append(f"🔹 {day}")
 
-        start_time = schedule.get("start_time", "--:--")
-        end_time = schedule.get("end_time", "--:--")
-
+        class_time = format_schedule_time(schedule)
+        
         lines.append(
-            f"• {row['course_title']} | ساعت {start_time} تا {end_time}"
+            f"• {row['course_title']} | ساعت {class_time}"
         )
 
     return "\n".join(lines)
@@ -1645,18 +1827,17 @@ async def user_week_callback_handler(update: Update, context: ContextTypes.DEFAU
             ]),
         )
         return WEEK_USER_ROOT
-
+    
     if callback == "uweek_alarm_menu":
         ensure_user_alarm_defaults(user_data)
-        changed = ensure_user_alarm_defaults(user_data)
-        if changed:
-            save_week_data(data)
+        save_week_data(data)
+    
         await query.edit_message_text(
             format_alarm_summary(data, user_data),
             reply_markup=build_alarm_root_keyboard(),
         )
         return WEEK_USER_ROOT
-
+    
     if callback == "uweek_alarm_all":
         context.user_data["week_alarm_target"] = {"type": "all"}
         context.user_data["week_state"] = WEEK_WAITING_ALARM_DAYS
@@ -2121,31 +2302,35 @@ def canonical_week_label_for_offset(offset):
 
 
 def format_alarm_fire_message(course_title, occurrence, schedule):
-    class_dt = occurrence["class_datetime"]
-    start_time = schedule.get("start_time", "--:--")
-    end_time = schedule.get("end_time", "--:--")
-    week_label = canonical_week_label_for_offset(occurrence["week_offset"])
+    week_label = canonical_week_label_for_offset(
+        occurrence["week_offset"]
+    )
+
+    class_time = format_schedule_time(schedule)
+
     return (
         "🔔 یادآوری کلاس\n\n"
         f"درس: {course_title}\n"
         f"روز: {occurrence['day_name']}\n"
         f"هفته: {week_label}\n"
-        f"ساعت کلاس: {start_time} تا {end_time}\n\n"
+        f"ساعت کلاس: {class_time}\n\n"
         "کلاس شما در این زمان برگزار می‌شود."
     )
 
 
 def format_alarm_cancel_message(course_title, occurrence, schedule):
-    class_dt = occurrence["class_datetime"]
-    start_time = schedule.get("start_time", "--:--")
-    end_time = schedule.get("end_time", "--:--")
-    week_label = canonical_week_label_for_offset(occurrence["week_offset"])
+    week_label = canonical_week_label_for_offset(
+        occurrence["week_offset"]
+    )
+
+    class_time = format_schedule_time(schedule)
+
     return (
         "🚫 اعلان کلاس لغو شد\n\n"
         f"درس: {course_title}\n"
         f"روز: {occurrence['day_name']}\n"
         f"هفته: {week_label}\n"
-        f"ساعت کلاس: {start_time} تا {end_time}\n\n"
+        f"ساعت کلاس: {class_time}\n\n"
         "این برنامه حذف یا کنسل شده است."
     )
 
