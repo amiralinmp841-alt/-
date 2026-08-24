@@ -124,6 +124,13 @@ def push_admin_history(context, db):
 
 # ------ DEFAULT_START_TEXT -------
 DEFAULT_START_TEXT = """🕊 به ربات کتابخانه دانشگاه خوش آمدید."""
+DEFAULT_HELP_TEXT = """
+❓ <b>راهنمای استفاده از ربات</b>
+
+اینجا راهنمای استفاده از ربات قرار می‌گیرد.
+
+برای استفاده از بخش‌های مختلف، از دکمه‌های منوی اصلی استفاده کنید.
+"""
 
 # --- wewb port ---
 PORT = int(os.environ.get("PORT", 10000))
