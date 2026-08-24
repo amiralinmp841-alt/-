@@ -79,6 +79,7 @@ from weekly_announcements import (
     WEEK_WAITING_GROUP_NAME,
     WEEK_WAITING_ADD_TIME,
     WEEK_WAITING_DELETE_TIME,
+    WEEK_WAITING_EDIT_GROUP_NAME,
     WEEK_USER_ROOT,
     WEEK_WAITING_ALARM_DAYS,
     WEEK_WAITING_ALARM_TIME,
@@ -6372,6 +6373,13 @@ def build_application():
                 MessageHandler(filters.TEXT & (~filters.COMMAND), receive_week_delete_text),
             ],
 
+            WEEK_WAITING_EDIT_GROUP_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    receive_week_edit_group_name
+                )
+            ],
+
             WEEK_USER_ROOT: [
                 CallbackQueryHandler(user_week_callback_handler, pattern=r"^uweek_"),
             ],
@@ -6418,8 +6426,8 @@ def build_application():
     
     application.job_queue.run_repeating(
         process_weekly_alarm_queue,
-        interval=10,
-        first=1,
+        interval=30,
+        first=5,
         name="weekly_alarm_queue",
     )
     
