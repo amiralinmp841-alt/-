@@ -200,7 +200,7 @@ def normalize_schedule_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text)
 
     return text.strip()
-    
+
 def normalize_time_value(value: str):
     value = normalize_digits(value).strip()
 
@@ -231,32 +231,51 @@ def normalize_time_value(value: str):
 def parse_time_part(time_text: str):
     time_text = normalize_schedule_text(time_text)
 
+    # حالت بازه:
+    # 8 تا 10
+    # 08:30-10:45
+    # از ساعت 8 تا 10
+    range_pattern = (
+        r"(?:از\s*)?"
+        r"(?:ساعت\s*)?"
+        r"(\d{1,2}(?::\d{1,2})?)"
+        r"\s*(?:تا|الی|-)\s*"
+        r"(\d{1,2}(?::\d{1,2})?)"
+    )
+
+    match = re.search(range_pattern, time_text)
+
+    if match:
+        start_time = normalize_time_value(match.group(1))
+        end_time = normalize_time_value(match.group(2))
+
+        if start_time and end_time:
+            return {
+                "start_time": start_time,
+                "end_time": end_time,
+            }
+
+    # حالت فقط ساعت شروع:
+    # ساعت 8
     # 8
-    # 08
-    # 8:30
-    # 08:30
-    time_value = r"(\d{1,2}(?::\d{1,2})?)"
+    # از ساعت 8
+    single_pattern = (
+        r"(?:از\s*)?"
+        r"(?:ساعت\s*)?"
+        r"(\d{1,2}(?::\d{1,2})?)"
+        r"(?!\s*(?:تا|الی|-))"
+    )
 
-    patterns = [
-        # ساعت 8 تا 10
-        rf"(?:ساعت\s*)?{time_value}\s*(?:تا|الی|-)\s*{time_value}",
+    match = re.search(single_pattern, time_text)
 
-        # از 8 تا 10
-        rf"از\s*{time_value}\s*(?:تا|الی|-)\s*{time_value}",
-    ]
+    if match:
+        start_time = normalize_time_value(match.group(1))
 
-    for pattern in patterns:
-        match = re.search(pattern, time_text)
-
-        if match:
-            start_time = normalize_time_value(match.group(1))
-            end_time = normalize_time_value(match.group(2))
-
-            if start_time and end_time:
-                return {
-                    "start_time": start_time,
-                    "end_time": end_time,
-                }
+        if start_time:
+            return {
+                "start_time": start_time,
+                "end_time": None,
+            }
 
     return None
 
@@ -281,8 +300,7 @@ def parse_schedule_line(line: str):
         r"(?:از\s*)?"
         r"(?:ساعت\s*)?"
         r"\d{1,2}(?::\d{1,2})?"
-        r"\s*(?:تا|الی|-)\s*"
-        r"\d{1,2}(?::\d{1,2})?"
+        r"(?:\s*(?:تا|الی|-)\s*\d{1,2}(?::\d{1,2})?)?"
     )
 
     line_without_time = re.sub(
@@ -360,10 +378,18 @@ def parse_schedule_line(line: str):
     # -----------------------------
     # 5) ساخت متن استاندارد
     # -----------------------------
+    if time_info["end_time"]:
+        time_text = (
+            f"ساعت {time_info['start_time']} "
+            f"تا {time_info['end_time']}"
+        )
+    else:
+        time_text = f"ساعت {time_info['start_time']}"
+    
     canonical_raw = (
         f"{canonical_week_label(week_info['mode'], week_info['week_offset'])}"
         f" ... {' و '.join(days)} ... "
-        f"ساعت {time_info['start_time']} تا {time_info['end_time']}"
+        f"{time_text}"
     )
 
     return {
@@ -679,8 +705,17 @@ async def week_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         parent_id = group.get("parent_id")
 
         affected_group_ids = collect_group_and_children_ids(data, group_id)
-        removed_map = {}
 
+        removed_map = {}
+        
+        for gid in affected_group_ids:
+            group_item = data.get("groups", {}).get(gid)
+        
+            if group_item:
+                removed_map[gid] = list(
+                    group_item.get("schedules", [])
+                )
+        
         for removed_group_id, removed_schedules in removed_map.items():
             if removed_schedules:
                 await dispatch_cancel_for_removed_schedules(
@@ -689,11 +724,6 @@ async def week_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
                     removed_group_id,
                     removed_schedules,
                 )
-
-        for gid in affected_group_ids:
-            group_item = data.get("groups", {}).get(gid)
-            if group_item:
-                removed_map[gid] = list(group_item.get("schedules", []))
 
         delete_group_recursive(data, group_id)
         save_week_data(data)
@@ -921,11 +951,11 @@ def _parse_delete_line(line: str):
     if time_info:
         remaining = normalized
         remaining = re.sub(
-            r"(ساعت\s*)?\d{1,2}:\d{2}\s*(?:تا|\-)\s*\d{1,2}:\d{2}",
+            r"(?:ساعت\s*)?\d{1,2}(?::\d{1,2})?\s*(?:تا|الی|-)\s*\d{1,2}(?::\d{1,2})?",
             "",
             remaining,
         )
-        remaining = re.sub(r"از\s*\d{1,2}:\d{2}\s*تا\s*\d{1,2}:\d{2}", "", remaining)
+        remaining = re.sub(r"از\s*\d{1,2}(?::\d{1,2})?\s*(?:تا|الی|-)\s*\d{1,2}(?::\d{1,2})?", "", remaining)
         remaining = normalize_schedule_text(remaining)
 
         week_info_inside = None
