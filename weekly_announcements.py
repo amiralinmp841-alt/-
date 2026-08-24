@@ -1863,48 +1863,102 @@ async def send_cancel_for_occurrence(bot, data, user_id, group_id, schedule, occ
     return True
 
 async def process_weekly_alarm_queue(context: ContextTypes.DEFAULT_TYPE):
-    data = load_week_data()
-    ensure_week_users_shape(data)
-    now = get_now()
-    changed = False
+    try:
+        data = load_week_data()
+        ensure_week_users_shape(data)
 
-    for user_id, user_data in data.get("users", {}).items():
-        ensure_user_alarm_defaults(user_data)
+        now = get_now()
 
-        if not user_data.get("alarm_enabled", True):
-            continue
+        print("\n========== WEEKLY ALARM CHECK ==========")
+        print("NOW:", now)
 
-        courses = clean_user_courses(data, user_data)
+        changed = False
 
-        for group_id in courses:
-            group = data.get("groups", {}).get(group_id)
-            if not group:
+        for user_id, user_data in data.get("users", {}).items():
+
+            print("\nUSER:", user_id)
+
+            ensure_user_alarm_defaults(user_data)
+
+            print("ALARM ENABLED:", user_data.get("alarm_enabled", True))
+
+            if not user_data.get("alarm_enabled", True):
+                print("⛔ Alarm disabled")
                 continue
 
-            alarm_config = get_user_alarm_config_for_group(user_data, group_id)
+            courses = clean_user_courses(data, user_data)
 
-            for schedule in group.get("schedules", []):
-                occurrences = get_schedule_occurrences(schedule, horizon_weeks=8, now=now)
+            print("COURSES:", courses)
 
-                for occurrence in occurrences:
-                    class_dt = occurrence["class_datetime"]
-                    alarm_dt = compute_alarm_datetime(class_dt, alarm_config)
+            for group_id in courses:
 
-                    if alarm_dt <= now < class_dt:
-                        sent = await send_alarm_for_occurrence(
-                            context.bot,
-                            data,
-                            user_id,
-                            group_id,
-                            schedule,
-                            occurrence,
+                group = data.get("groups", {}).get(group_id)
+
+                if not group:
+                    print("❌ GROUP NOT FOUND:", group_id)
+                    continue
+
+                alarm_config = get_user_alarm_config_for_group(
+                    user_data,
+                    group_id
+                )
+
+                print("\nGROUP:", group_id)
+                print("ALARM CONFIG:", alarm_config)
+
+                for schedule in group.get("schedules", []):
+
+                    occurrences = get_schedule_occurrences(
+                        schedule,
+                        horizon_weeks=8,
+                        now=now
+                    )
+
+                    print("SCHEDULE:", schedule)
+                    print("OCCURRENCES:", len(occurrences))
+
+                    for occurrence in occurrences:
+
+                        class_dt = occurrence["class_datetime"]
+
+                        alarm_dt = compute_alarm_datetime(
+                            class_dt,
+                            alarm_config
                         )
-                        if sent:
-                            changed = True
 
-    if changed:
-        save_week_data(data)
+                        print("-------------------------")
+                        print("CLASS:", class_dt)
+                        print("ALARM:", alarm_dt)
+                        print("NOW:", now)
 
+                        if alarm_dt <= now < class_dt:
+
+                            print("🔔 ALARM SHOULD SEND!")
+
+                            sent = await send_alarm_for_occurrence(
+                                context.bot,
+                                data,
+                                user_id,
+                                group_id,
+                                schedule,
+                                occurrence,
+                            )
+
+                            print("SEND RESULT:", sent)
+
+                            if sent:
+                                changed = True
+
+        if changed:
+            save_week_data(data)
+
+        print("========== CHECK FINISHED ==========\n")
+
+    except Exception as e:
+        print("❌ WEEKLY ALARM ERROR:", repr(e))
+        import traceback
+        traceback.print_exc()
+        
 async def dispatch_immediate_alarms_for_new_schedules(bot, data, group_id, schedules):
     now = get_now()
     changed = False
