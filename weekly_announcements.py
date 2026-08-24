@@ -1304,11 +1304,8 @@ async def get_week_alarm_entry(update: Update, context: ContextTypes.DEFAULT_TYP
 
     user_id = get_week_user_id(update)
     ensure_user_week_data(data, user_id)
-    changed = ensure_week_users_shape(data)
-    changed = ensure_user_week_data(data, user_id) or changed
-    
-    if changed:
-        save_week_data(data)
+
+    save_week_data(data)
 
     await update.message.reply_text(
         "⏰ پنل برنامه هفتگی\n\nیکی از گزینه‌ها را انتخاب کن:",
@@ -1539,11 +1536,45 @@ async def receive_week_alarm_days(update: Update, context: ContextTypes.DEFAULT_
     )
     return WEEK_WAITING_ALARM_TIME
 
+def reset_alarm_sent_for_target(data, user_id, target):
+    """
+    وقتی کاربر زمان/روز الارم را تغییر می‌دهد،
+    وضعیت ارسال الارم occurrenceهای مربوط به همان هدف را ریست می‌کند.
+    """
+    user_data = ensure_user_week_data(data, user_id)
 
+    sent_map = user_data.setdefault("alarm_sent", {})
+
+    if target["type"] == "all":
+        # تغییر تنظیم کلی:
+        # برای همه درس‌های کاربر وضعیت alarm_sent ریست شود.
+        group_ids = clean_user_courses(data, user_data)
+
+    else:
+        # فقط همان درس
+        group_id = target.get("group_id")
+        group_ids = [group_id] if group_id else []
+
+    changed = False
+
+    for key in list(sent_map.keys()):
+        for group_id in group_ids:
+            prefix = f"{group_id}__"
+
+            if key.startswith(prefix):
+                sent_map.pop(key, None)
+                changed = True
+                break
+
+    return changed
+    
 async def receive_week_alarm_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_value = normalize_time_value((update.message.text or "").strip())
+
     if not time_value:
-        await update.message.reply_text("❌ ساعت معتبر نیست. مثال درست: 06:00")
+        await update.message.reply_text(
+            "❌ ساعت معتبر نیست. مثال درست: 06:00"
+        )
         return WEEK_WAITING_ALARM_TIME
 
     data = load_week_data()
@@ -1556,32 +1587,104 @@ async def receive_week_alarm_time(update: Update, context: ContextTypes.DEFAULT_
     days_before = context.user_data.get("week_alarm_days_before", 1)
 
     if not target:
-        await update.message.reply_text("❌ مقصد الارم مشخص نیست. دوباره /get_week_alarm را بزن.")
+        await update.message.reply_text(
+            "❌ مقصد الارم مشخص نیست. دوباره /get_week_alarm را بزن."
+        )
         return ConversationHandler.END
 
+    change = False
+
+    # =========================
+    # الارم همه درس‌ها
+    # =========================
+
     if target["type"] == "all":
-        user_data["alarm_all"] = {
+
+        new_alarm = {
             "days_before": days_before,
             "time": time_value,
         }
+
+        old_alarm = user_data.get(
+            "alarm_all",
+            {
+                "days_before": 1,
+                "time": "06:00",
+            }
+        )
+
+        if (
+            old_alarm.get("days_before") != days_before
+            or old_alarm.get("time") != time_value
+        ):
+            change = True
+
+        user_data["alarm_all"] = new_alarm
+
         message = (
             f"✅ الارم همه درس‌ها تنظیم شد:\n"
             f"{days_before} روز قبل، ساعت {time_value}"
         )
+
+    # =========================
+    # الارم یک درس خاص
+    # =========================
+
     else:
+
         group_id = target.get("group_id")
+
         if group_id not in data.get("groups", {}):
-            await update.message.reply_text("❌ درس پیدا نشد. دوباره تلاش کن.")
+            await update.message.reply_text(
+                "❌ درس پیدا نشد. دوباره تلاش کن."
+            )
             return ConversationHandler.END
 
-        user_data.setdefault("course_alarms", {})[group_id] = {
+        new_alarm = {
             "days_before": days_before,
             "time": time_value,
         }
+
+        old_alarm = user_data.setdefault(
+            "course_alarms",
+            {}
+        ).get(group_id)
+
+        if old_alarm is None:
+            change = True
+
+        elif (
+            old_alarm.get("days_before") != days_before
+            or old_alarm.get("time") != time_value
+        ):
+            change = True
+
+        user_data.setdefault(
+            "course_alarms",
+            {}
+        )[group_id] = new_alarm
+
         message = (
-            f"✅ الارم درس «{get_group_title_path(data, group_id)}» تنظیم شد:\n"
+            f"✅ الارم درس "
+            f"«{get_group_title_path(data, group_id)}» "
+            f"تنظیم شد:\n"
             f"{days_before} روز قبل، ساعت {time_value}"
         )
+
+    # ==========================================
+    # اگر تنظیم تغییر کرده، وضعیت ارسال ریست شود
+    # ==========================================
+
+    if change:
+        reset_alarm_sent_for_target(
+            data,
+            user_id,
+            target,
+        )
+
+    # ==========================================
+    # بررسی الارم فوری
+    # ==========================================
 
     immediate_sent = await dispatch_immediate_alarm_after_user_setting(
         context.bot,
@@ -1597,15 +1700,19 @@ async def receive_week_alarm_time(update: Update, context: ContextTypes.DEFAULT_
     context.user_data.pop("week_alarm_days_before", None)
 
     if immediate_sent:
-        message += "\n\n🔔 برای بعضی کلاس‌های نزدیک، یادآوری همین الان ارسال شد."
+        message += (
+            "\n\n🔔 برای بعضی کلاس‌های نزدیک، "
+            "یادآوری همین الان ارسال شد."
+        )
 
     await update.message.reply_text(message)
+
     await update.message.reply_text(
         format_alarm_summary(data, user_data),
         reply_markup=build_alarm_root_keyboard(),
     )
-    return WEEK_USER_ROOT
 
+    return WEEK_USER_ROOT
 
 async def dispatch_immediate_alarm_after_user_setting(bot, data, user_id, target):
     now = get_now()
