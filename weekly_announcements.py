@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo
 from week_storage import load_week_data, save_week_data, upload_weekly_to_telegram
-
+import jdatetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, ConversationHandler
 
@@ -1261,7 +1261,15 @@ def format_user_full_schedule(data, user_data):
         )
     )
 
-    lines = ["📅 برنامه کل هفتگی من:"]
+    current_datetime_text = get_current_persian_datetime_text()
+    
+    lines = [
+        "📅 برنامه کل هفتگی من:",
+        "",
+        current_datetime_text,
+        "",
+        "━━━━━━━━━━━━━━━━━━",
+    ]
 
     current_week = None
     current_day = None
@@ -1669,7 +1677,51 @@ async def toggle_week_alarm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def get_now():
     return datetime.now(TEHRAN_TZ)
     
+PERSIAN_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
 
+def to_persian_digits(value):
+    return str(value).translate(PERSIAN_DIGITS)
+
+
+PERSIAN_MONTH_NAMES = {
+    1: "فروردین",
+    2: "اردیبهشت",
+    3: "خرداد",
+    4: "تیر",
+    5: "مرداد",
+    6: "شهریور",
+    7: "مهر",
+    8: "آبان",
+    9: "آذر",
+    10: "دی",
+    11: "بهمن",
+    12: "اسفند",
+}
+def get_current_persian_datetime_text():
+    now = get_now()
+
+    jalali = jdatetime.datetime.fromgregorian(datetime=now)
+
+    weekdays = {
+        0: "دوشنبه",
+        1: "سه شنبه",
+        2: "چهارشنبه",
+        3: "پنج شنبه",
+        4: "جمعه",
+        5: "شنبه",
+        6: "یک شنبه",
+    }
+
+    day_name = weekdays.get(now.weekday(), "")
+
+    return (
+        f"📆 امروز: {day_name} "
+        f"{to_persian_digits(jalali.day)} "
+        f"{PERSIAN_MONTH_NAMES[jalali.month]} "
+        f"{to_persian_digits(jalali.year)}\n"
+        f"🕐 ساعت الان: "
+        f"{to_persian_digits(now.strftime('%H:%M:%S'))}"
+    )
 def get_day_index(day_name: str):
     try:
         return ALL_DAYS.index(day_name)
@@ -1958,7 +2010,7 @@ async def process_weekly_alarm_queue(context: ContextTypes.DEFAULT_TYPE):
         print("❌ WEEKLY ALARM ERROR:", repr(e))
         import traceback
         traceback.print_exc()
-        
+
 async def dispatch_immediate_alarms_for_new_schedules(bot, data, group_id, schedules):
     now = get_now()
     changed = False
