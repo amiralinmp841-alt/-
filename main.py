@@ -6184,12 +6184,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return CHOOSING
 
 def build_application():
-    ## ==== ==== ==== بررسی ادمین بودن ==== ==== ==== 
-    #user_id = update.effective_user.id
-    #userdata = load_userdata()
-    #is_admin = (user_id in ADMIN_IDS) or (user_id in userdata.get("sub_admins", []))
-    #filter_admins = filters.User(user_id=is_admin)
-    
     application = ApplicationBuilder().token(TOKEN).build()
 
     application.add_handler(
@@ -6253,7 +6247,6 @@ def build_application():
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
-            #CommandHandler("set_week", set_week_entry, filters=filter_admins),
             CommandHandler("set_week", set_week_entry),
             CommandHandler("alarm", toggle_week_alarm),
             CommandHandler("get_week_alarm", get_week_alarm_entry),
@@ -6478,7 +6471,7 @@ async def main():
 
     tg_app = build_application()
     await tg_app.initialize()
-    #await tg_app.start()
+    await tg_app.start()
     await tg_app.bot.set_webhook(
         f"{WEBHOOK_URL}/{TOKEN}",
         allowed_updates=[
