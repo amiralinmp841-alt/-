@@ -65,14 +65,36 @@ def normalize_day_name(day_text: str):
 
 def parse_days_part(days_text: str):
     days_text = normalize_schedule_text(days_text)
-    days_text = days_text.replace("/", " و ").replace("،", " و ").replace(",", " و ")
-    parts = [p.strip() for p in re.split(r"\s+و\s+", days_text) if p.strip()]
+
+    # جداکننده‌های مختلف
+    days_text = days_text.replace("/", " ")
+    days_text = days_text.replace(",", " ")
+    days_text = days_text.replace("،", " ")
+
+    # حذف کلمات اضافی
+    days_text = re.sub(r"\bروز(?:های)?\b", " ", days_text)
 
     result = []
-    for part in parts:
-        normalized = normalize_day_name(part)
-        if normalized and normalized not in result:
-            result.append(normalized)
+
+    # مستقیم تمام نام روزها را داخل متن پیدا می‌کنیم
+    aliases = sorted(
+        PERSIAN_DAY_ALIASES.keys(),
+        key=len,
+        reverse=True
+    )
+
+    remaining = days_text
+
+    for alias in aliases:
+        pattern = re.escape(alias)
+
+        if re.search(pattern, remaining):
+            normalized = PERSIAN_DAY_ALIASES[alias]
+
+            if normalized not in result:
+                result.append(normalized)
+
+            remaining = re.sub(pattern, " ", remaining)
 
     return result
 
@@ -98,6 +120,7 @@ def parse_week_part(week_text: str):
         "همه هفته ها",
         "همه هفته‌ها",
     }
+
     if week_text in recurring_forms:
         return {
             "mode": "recurring",
@@ -105,24 +128,31 @@ def parse_week_part(week_text: str):
             "label": "این هفته و هفته های بعد",
         }
 
-    if week_text in {"این هفته", "هفته جاری"}:
+    if week_text in {
+        "این هفته",
+        "هفته جاری",
+    }:
         return {
             "mode": "single",
             "week_offset": 0,
             "label": "این هفته",
         }
 
-    match = re.fullmatch(r"(\d+)\s+هفته\s+بعد", week_text)
+    match = re.fullmatch(
+        r"(\d+)\s*هفته\s*بعد",
+        week_text
+    )
+
     if match:
         offset = int(match.group(1))
+
         return {
             "mode": "single",
             "week_offset": offset,
             "label": f"{offset} هفته بعد",
         }
 
-    match = re.fullmatch(r"هفته\s+بعد", week_text)
-    if match:
+    if week_text == "هفته بعد":
         return {
             "mode": "single",
             "week_offset": 1,
@@ -131,38 +161,87 @@ def parse_week_part(week_text: str):
 
     return None
 
+def normalize_digits(text: str) -> str:
+    return (text or "").translate(PERSIAN_TO_ENGLISH_DIGITS)
+
+
+def normalize_schedule_text(text: str) -> str:
+    text = normalize_digits(text)
+
+    text = (text or "").strip()
+
+    text = text.replace("ي", "ی").replace("ك", "ک")
+    text = text.replace("‌", " ")
+
+    # انواع خط تیره
+    text = text.replace("–", "-")
+    text = text.replace("—", "-")
+
+    # جداکننده‌های مختلف
+    text = text.replace("،", " ")
+    text = text.replace(",", " ")
+    text = text.replace("؛", " ")
+    text = text.replace("...", " ")
+
+    # الی را هم مثل تا در نظر بگیر
+    text = re.sub(r"\bالی\b", " تا ", text)
+
+    # فاصله‌گذاری
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip()
 
 def normalize_time_value(value: str):
-    value = value.strip()
-    parts = value.split(":")
-    if len(parts) != 2:
-        return None
-    try:
-        hour = int(parts[0])
-        minute = int(parts[1])
-    except Exception:
-        return None
+    value = normalize_digits(value).strip()
+
+    if ":" in value:
+        parts = value.split(":")
+
+        if len(parts) != 2:
+            return None
+
+        try:
+            hour = int(parts[0])
+            minute = int(parts[1])
+        except ValueError:
+            return None
+
+    else:
+        try:
+            hour = int(value)
+            minute = 0
+        except ValueError:
+            return None
 
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         return None
 
     return f"{hour:02d}:{minute:02d}"
 
-
 def parse_time_part(time_text: str):
     time_text = normalize_schedule_text(time_text)
 
+    # 8
+    # 08
+    # 8:30
+    # 08:30
+    time_value = r"(\d{1,2}(?::\d{1,2})?)"
+
     patterns = [
-        r"ساعت\s*(\d{1,2}:\d{2})\s*(?:تا|\-)\s*(\d{1,2}:\d{2})",
-        r"(\d{1,2}:\d{2})\s*(?:تا|\-)\s*(\d{1,2}:\d{2})",
-        r"از\s*(\d{1,2}:\d{2})\s*تا\s*(\d{1,2}:\d{2})",
+        # ساعت 8 تا 10
+        rf"(?:ساعت\s*)?{time_value}\s*(?:تا|الی|-)\s*{time_value}",
+
+        # از 8 تا 10
+        rf"از\s*{time_value}\s*(?:تا|الی|-)\s*{time_value}",
     ]
 
     for pattern in patterns:
         match = re.search(pattern, time_text)
+
         if match:
             start_time = normalize_time_value(match.group(1))
             end_time = normalize_time_value(match.group(2))
+
             if start_time and end_time:
                 return {
                     "start_time": start_time,
@@ -171,25 +250,50 @@ def parse_time_part(time_text: str):
 
     return None
 
-
 def parse_schedule_line(line: str):
     raw_line = normalize_schedule_text(line)
+
     if not raw_line:
         return None
 
+    # -----------------------------
+    # 1) تشخیص زمان
+    # -----------------------------
     time_info = parse_time_part(raw_line)
+
     if not time_info:
         return None
 
+    # حذف بازه زمانی از متن
     line_without_time = raw_line
+
+    time_pattern = (
+        r"(?:از\s*)?"
+        r"(?:ساعت\s*)?"
+        r"\d{1,2}(?::\d{1,2})?"
+        r"\s*(?:تا|الی|-)\s*"
+        r"\d{1,2}(?::\d{1,2})?"
+    )
+
     line_without_time = re.sub(
-        r"(ساعت\s*)?\d{1,2}:\d{2}\s*(?:تا|\-)\s*\d{1,2}:\d{2}",
-        "",
+        time_pattern,
+        " ",
+        line_without_time,
+        flags=re.IGNORECASE,
+    )
+
+    # حذف کلمات اضافی مربوط به زمان
+    line_without_time = re.sub(
+        r"\b(?:ساعت|صبح|عصر|شب)\b",
+        " ",
         line_without_time,
     )
-    line_without_time = re.sub(r"از\s*\d{1,2}:\d{2}\s*تا\s*\d{1,2}:\d{2}", "", line_without_time)
+
     line_without_time = normalize_schedule_text(line_without_time)
 
+    # -----------------------------
+    # 2) تشخیص هفته
+    # -----------------------------
     week_info = None
     found_week_text = None
 
@@ -202,32 +306,50 @@ def parse_schedule_line(line: str):
         r"هر هفته",
         r"همه هفته ها",
         r"همه هفته‌ها",
-        r"این هفته",
         r"هفته جاری",
-        r"\d+\s+هفته\s+بعد",
+        r"\d+\s*هفته\s*بعد",
         r"هفته بعد",
+        r"این هفته",
     ]
 
     for pattern in candidate_week_patterns:
         match = re.search(pattern, line_without_time)
+
         if match:
-            found_week_text = normalize_schedule_text(match.group(0))
+            found_week_text = match.group(0)
+
             week_info = parse_week_part(found_week_text)
+
             if week_info:
                 break
 
     if not week_info:
         return None
 
-    days_text = line_without_time.replace(found_week_text, " ")
-    days_text = days_text.replace("...", " ")
-    days_text = days_text.replace("روز", " ")
-    days_text = normalize_schedule_text(days_text)
+    # -----------------------------
+    # 3) حذف بخش هفته
+    # -----------------------------
+    remaining_text = line_without_time
 
-    days = parse_days_part(days_text)
+    if found_week_text:
+        remaining_text = remaining_text.replace(
+            found_week_text,
+            " "
+        )
+
+    remaining_text = normalize_schedule_text(remaining_text)
+
+    # -----------------------------
+    # 4) تشخیص روزها
+    # -----------------------------
+    days = parse_days_part(remaining_text)
+
     if not days:
         return None
 
+    # -----------------------------
+    # 5) ساخت متن استاندارد
+    # -----------------------------
     canonical_raw = (
         f"{canonical_week_label(week_info['mode'], week_info['week_offset'])}"
         f" ... {' و '.join(days)} ... "
@@ -238,12 +360,16 @@ def parse_schedule_line(line: str):
         "id": str(uuid.uuid4()),
         "raw": raw_line,
         "canonical_raw": canonical_raw,
+
         "mode": week_info["mode"],
         "week_offset": week_info["week_offset"],
         "week_label": week_info["label"],
+
         "days": days,
+
         "start_time": time_info["start_time"],
         "end_time": time_info["end_time"],
+
         "created_at": get_now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
@@ -606,13 +732,22 @@ async def week_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data["week_state"] = WEEK_WAITING_ADD_TIME
 
         await query.message.reply_text(
-            "فرمت‌های قابل قبول:\n\n"
-            "این هفته ... شنبه ... ساعت 18:00 تا 20:00\n"
-            "1 هفته بعد ... یک شنبه ... ساعت 16:00 تا 20:00\n"
-            "هفته بعد ... دوشنبه ... 08:00 تا 10:00\n"
-            "هر هفته ... شنبه و یک شنبه ... 18:00-20:00\n"
-            "از این هفته به بعد ... سه شنبه ... از 14:00 تا 16:00\n\n"
-            "می‌توانید چند خط بفرستید.\n"
+            "⏰ تایم جدید را با هر ترتیب راحتی وارد کن.\n\n"
+        
+            "فقط باید شامل این ۳ مورد باشد:\n"
+            "📅 هفته\n"
+            "📆 روز یا روزها\n"
+            "🕐 ساعت شروع و پایان\n\n"
+        
+            "مثال‌ها:\n\n"
+        
+            "شنبه این هفته 18 تا 20\n"
+            "این هفته شنبه ساعت 18:00-20:00\n"
+            "هر هفته شنبه و دوشنبه 8 تا 10\n"
+            "۲ هفته بعد جمعه 10:30 تا 12\n"
+            "از این هفته به بعد سه شنبه 14 تا 16\n\n"
+        
+            "می‌توانی چند برنامه را هم در چند خط بفرستی.\n"
             "برای لغو: /cancel"
         )
         return WEEK_WAITING_ADD_TIME
@@ -673,7 +808,7 @@ async def receive_week_group_name(update: Update, context: ContextTypes.DEFAULT_
     if parent_id:
         parent_group = data["groups"].get(parent_id)
         if not parent_group:
-            await update.message.reply_text("❌ گروه والد پیدا نشد. دوباره /set_week را بزنید.")
+            await update.message.reply_text("❌ گروه والد پیدا نشد. دوباره /set_alarm را بزنید.")
             return ConversationHandler.END
         parent_group.setdefault("children", []).append(group_id)
 
@@ -699,7 +834,7 @@ async def receive_week_group_name(update: Update, context: ContextTypes.DEFAULT_
 async def receive_week_time_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_id = context.user_data.get("week_target_group")
     if not group_id:
-        await update.message.reply_text("❌ گروه مقصد مشخص نیست. دوباره /set_week را بزنید.")
+        await update.message.reply_text("❌ گروه مقصد مشخص نیست. دوباره /set_alarm را بزنید.")
         return ConversationHandler.END
 
     text = update.message.text or ""
@@ -707,7 +842,7 @@ async def receive_week_time_text(update: Update, context: ContextTypes.DEFAULT_T
     group_data = data.get("groups", {}).get(group_id)
 
     if not group_data:
-        await update.message.reply_text("❌ گروه پیدا نشد. دوباره /set_week را بزنید.")
+        await update.message.reply_text("❌ گروه پیدا نشد. دوباره /set_alarm را بزنید.")
         return ConversationHandler.END
 
     parsed_items, invalid_lines = parse_week_schedule_text(text)
@@ -902,14 +1037,14 @@ def _matches_delete_request(item, line):
 async def receive_week_delete_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_id = context.user_data.get("week_target_group")
     if not group_id:
-        await update.message.reply_text("❌ گروه مقصد مشخص نیست. دوباره /set_week را بزنید.")
+        await update.message.reply_text("❌ گروه مقصد مشخص نیست. دوباره /set_alarm را بزنید.")
         return ConversationHandler.END
 
     data = load_week_data()
     group_data = data.get("groups", {}).get(group_id)
 
     if not group_data:
-        await update.message.reply_text("❌ گروه پیدا نشد. دوباره /set_week را بزنید.")
+        await update.message.reply_text("❌ گروه پیدا نشد. دوباره /set_alarm را بزنید.")
         return ConversationHandler.END
 
     text = update.message.text or ""
@@ -1588,7 +1723,7 @@ async def receive_week_alarm_time(update: Update, context: ContextTypes.DEFAULT_
 
     if not target:
         await update.message.reply_text(
-            "❌ مقصد الارم مشخص نیست. دوباره /get_week_alarm را بزن."
+            "❌ مقصد الارم مشخص نیست. دوباره /get_alarm را بزن."
         )
         return ConversationHandler.END
 
