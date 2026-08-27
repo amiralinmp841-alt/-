@@ -89,6 +89,16 @@ from weekly_announcements import (
     WEEK_WAITING_BACKUP_FILE,
     handle_week_backup_actions,
 )
+from score import (
+    configure_score_system,
+    restore_scores_on_startup,
+    score_command,
+    score_callback_handler,
+    handle_score_excel_state,
+    receive_score_backup,
+    receive_national_id,
+    handle_score_deeplink,
+)
 
 def delete_node_recursive(db, node_id):
     # اگر نود وجود نداشت
@@ -122,7 +132,7 @@ def push_admin_history(context, db):
 
 # --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION --- --- CONFIGURATION ---
 
-# ------ DEFAULT_START_TEXT -------
+# ------ DEFAULT_START_TEXT_HELP_TEXT -------
 DEFAULT_START_TEXT = """🕊 به ربات کتابخانه دانشگاه خوش آمدید."""
 DEFAULT_HELP_TEXT = """
 ❓ <b>راهنمای استفاده از ربات</b>
@@ -179,7 +189,13 @@ logging.basicConfig(
     WAITING_REPORT_TEXT,
     WAITING_START_PAGE_CONTENT,
     WAITING_HELP_PAGE_CONTENT,
-) = range(18)
+    # ================= SCORE STATES =================
+    SCORE_ROOT,
+    SCORE_WAITING_EXCEL,
+    SCORE_WAITING_DELETE,
+    SCORE_WAITING_BACKUP,
+    SCORE_WAITING_NATIONAL_ID,
+) = range(23)
 
 # ============ TELEGRAM USER API BACKUP CONFIG ============
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
@@ -540,6 +556,32 @@ def track_user_activity(update: Update, count_message=True):
     should_upload = (old_count == 0) or (new_count % 10 == 0)
 
     save_userdata(userdata, upload=should_upload)
+
+# =========================================================
+# SCORE SYSTEM CONFIG
+# =========================================================
+
+def get_all_score_admin_ids():
+    """
+    ادمین‌های مجاز پنل نمرات.
+    فعلاً همان ADMIN_IDS اصلی ربات.
+    """
+
+    return ADMIN_IDS
+
+
+configure_score_system(
+    score_root_state=SCORE_ROOT,
+    score_waiting_excel_state=SCORE_WAITING_EXCEL,
+    score_waiting_delete_state=SCORE_WAITING_DELETE,
+    score_waiting_backup_state=SCORE_WAITING_BACKUP,
+    score_waiting_national_id_state=SCORE_WAITING_NATIONAL_ID,
+
+    upload_file_to_telegram=upload_file_to_telegram,
+    download_latest_file_from_telegram=download_latest_file_from_telegram,
+
+    get_admin_ids=get_all_score_admin_ids,
+)
 
 def is_user_banned(user_id: int) -> bool:
     userdata = load_userdata()
@@ -3124,22 +3166,25 @@ async def not_started(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "برای ادامه لطفاً دستور /start را بزنید."
     )
 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     track_user_activity(update, count_message=True)
+
     user_id = update.effective_user.id
+
     if is_user_banned(user_id):
         await update.message.reply_text(
             "⛔️ شما از ربات بن شدید و امکان استفاده از ربات را ندارید.",
             reply_markup=ReplyKeyboardRemove()
         )
         return ConversationHandler.END
+
     userdata = load_userdata()
     sub_admins = userdata.get("sub_admins", [])
-    is_admin = (user_id in ADMIN_IDS) or (user_id in sub_admins)
 
-    # پاک‌سازی کامل وضعیت قبلی
-    #old_current_node = context.user_data.get("current_node", "root")
+    is_admin = (
+        user_id in ADMIN_IDS
+        or user_id in sub_admins
+    )
 
     # فقط داده‌های موقتی پاک شوند
     context.user_data.pop("temp_content", None)
@@ -3148,146 +3193,326 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     db = load_db()
 
-    args = context.args  # 👈 payload اینجاست
-    # اگر دیپ‌لینک فایل باشد
+    # =====================================================
+    # دریافت payload دیپ‌لینک
+    # =====================================================
+
+    args = context.args
+
+    # =====================================================
+    # 📊 دیپ‌لینک دریافت نمره
+    #
+    # مثال:
+    # https://t.me/BOT_USERNAME?start=score_a1b2c3d4
+    # =====================================================
+
+    if args:
+        payload = args[0]
+
+        if payload.startswith("score_"):
+            token = payload.replace(
+                "score_",
+                "",
+                1
+            )
+
+            score_state = await handle_score_deeplink(
+                update,
+                context,
+                token
+            )
+
+            if score_state is not None:
+                return score_state
+
+    # =====================================================
+    # 📁 اگر دیپ‌لینک فایل باشد
+    # =====================================================
+
     if args:
         payload = args[0]
 
         node_id = None
         content_index = None
 
-        # لینک قدیمی: file__{node_id}__{index}
+        # لینک قدیمی:
+        # file__{node_id}__{index}
+
         if payload.startswith("file__"):
             parts = payload.split("__", 2)
+
             if len(parts) == 3:
                 _, node_id, index_str = parts
+
                 try:
                     content_index = int(index_str)
+
                 except ValueError:
                     node_id = None
                     content_index = None
 
-        # لینک جدید: file_{node_id}_{index}
+        # لینک جدید:
+        # file_{node_id}_{index}
+
         elif payload.startswith("file_"):
             raw = payload[len("file_"):]
+
             try:
                 node_id, index_str = raw.rsplit("_", 1)
                 content_index = int(index_str)
+
             except ValueError:
                 node_id = None
                 content_index = None
 
         if node_id is not None and content_index is not None:
-            if node_id in db:
-                contents = db[node_id].get("contents", [])
-                if 0 <= content_index < len(contents):
-                    bot_username = context.bot.username
-                    path_text = get_node_path_html(db, node_id, bot_username)
 
-                    current_node = context.user_data.get("current_node", "root")
+            if node_id in db:
+
+                contents = db[node_id].get(
+                    "contents",
+                    []
+                )
+
+                if 0 <= content_index < len(contents):
+
+                    bot_username = context.bot.username
+
+                    path_text = get_node_path_html(
+                        db,
+                        node_id,
+                        bot_username
+                    )
+
+                    current_node = context.user_data.get(
+                        "current_node",
+                        "root"
+                    )
 
                     await update.message.reply_text(
                         f"📂 مسیر فایل:\n{path_text}",
-                        reply_markup=get_keyboard(current_node, is_admin, user_id=user_id),
+                        reply_markup=get_keyboard(
+                            current_node,
+                            is_admin,
+                            user_id=user_id
+                        ),
                         parse_mode="HTML",
                         disable_web_page_preview=True
                     )
 
                     item = contents[content_index]
+
                     try:
                         msg_type = item["type"]
                         saved_entities = item.get("entities")
 
                         if msg_type == "text":
+
                             if saved_entities is not None:
                                 await update.message.reply_text(
                                     text=item["text"],
                                     entities=saved_entities
                                 )
+
                             else:
                                 await update.message.reply_text(
                                     text=item["text"],
                                     parse_mode="HTML"
                                 )
+
                         else:
+
                             file_id = item["file_id"]
                             caption = item.get("caption", "")
 
-                            send_args = {"caption": caption}
+                            send_args = {
+                                "caption": caption
+                            }
+
                             if saved_entities is not None:
-                                send_args["caption_entities"] = saved_entities
+                                send_args[
+                                    "caption_entities"
+                                ] = saved_entities
+
                             else:
-                                send_args["parse_mode"] = "HTML"
+                                send_args[
+                                    "parse_mode"
+                                ] = "HTML"
 
                             if msg_type == "photo":
-                                await update.message.reply_photo(photo=file_id, **send_args)
+                                await update.message.reply_photo(
+                                    photo=file_id,
+                                    **send_args
+                                )
+
                             elif msg_type == "video":
-                                await update.message.reply_video(video=file_id, **send_args)
+                                await update.message.reply_video(
+                                    video=file_id,
+                                    **send_args
+                                )
+
                             elif msg_type == "document":
-                                await update.message.reply_document(document=file_id, **send_args)
+                                await update.message.reply_document(
+                                    document=file_id,
+                                    **send_args
+                                )
+
                             elif msg_type == "audio":
-                                await update.message.reply_audio(audio=file_id, **send_args)
+                                await update.message.reply_audio(
+                                    audio=file_id,
+                                    **send_args
+                                )
+
                             elif msg_type == "voice":
-                                await update.message.reply_voice(voice=file_id, **send_args)
+                                await update.message.reply_voice(
+                                    voice=file_id,
+                                    **send_args
+                                )
 
                     except Exception as e:
-                        logging.error(f"Error sending deeplink file: {e}")
-                        await update.message.reply_text("❌ خطا در ارسال فایل.")
+                        logging.error(
+                            f"Error sending deeplink file: {e}"
+                        )
+
+                        await update.message.reply_text(
+                            "❌ خطا در ارسال فایل."
+                        )
 
                     if "current_node" not in context.user_data:
                         context.user_data["current_node"] = "root"
 
                     return CHOOSING
 
-            await update.message.reply_text("❌ لینک فایل نامعتبر است.")
+            await update.message.reply_text(
+                "❌ لینک فایل نامعتبر است."
+            )
+
             return CHOOSING
 
-    # 🔗 اگر start با هش اومده
+    # =====================================================
+    # 🔗 اگر start با هش / شناسه نود آمده باشد
+    # =====================================================
+
     if args:
+
         target_id = args[0]
 
         if target_id in db:
-            set_report_page(context, target_id)
-            target_node = db[target_id]
-            has_children = bool(target_node.get("children"))
 
-            # 👤 کاربر عادی + نود بدون فرزند => فقط محتوا نمایش بده
+            set_report_page(
+                context,
+                target_id
+            )
+
+            target_node = db[target_id]
+
+            has_children = bool(
+                target_node.get("children")
+            )
+
+            # 👤 کاربر عادی + نود بدون فرزند
+            # فقط محتوا نمایش داده شود
+
             if not is_admin and not has_children:
-                parent_id = target_node.get("parent") or "root"
-                context.user_data["current_node"] = parent_id
+
+                parent_id = (
+                    target_node.get("parent")
+                    or "root"
+                )
+
+                context.user_data[
+                    "current_node"
+                ] = parent_id
+
                 bot_username = context.bot.username
-                path_text = get_node_path_html(db, target_id, bot_username)
+
+                path_text = get_node_path_html(
+                    db,
+                    target_id,
+                    bot_username
+                )
 
                 await update.message.reply_text(
                     f"📂 مسیر:\n{path_text}",
-                    reply_markup=get_keyboard(parent_id, is_admin, user_id=user_id),
+                    reply_markup=get_keyboard(
+                        parent_id,
+                        is_admin,
+                        user_id=user_id
+                    ),
                     parse_mode="HTML",
                     disable_web_page_preview=True
                 )
 
-                await send_node_contents(update, context, target_id)
+                await send_node_contents(
+                    update,
+                    context,
+                    target_id
+                )
+
                 return CHOOSING
 
-            # 👑 ادمین، یا نودی که فرزند دارد => خود پوشه باز شود
-            context.user_data["current_node"] = target_id
+            # 👑 ادمین، یا نودی که فرزند دارد
+            # خود پوشه باز شود
+
+            context.user_data[
+                "current_node"
+            ] = target_id
+
             bot_username = context.bot.username
-            path_text = get_node_path_html(db, target_id, bot_username)
+
+            path_text = get_node_path_html(
+                db,
+                target_id,
+                bot_username
+            )
 
             await update.message.reply_text(
                 f"📂 مسیر:\n{path_text}",
-                reply_markup=get_keyboard(target_id, is_admin, user_id=user_id),
+                reply_markup=get_keyboard(
+                    target_id,
+                    is_admin,
+                    user_id=user_id
+                ),
                 parse_mode="HTML",
                 disable_web_page_preview=True
             )
 
-            await send_node_contents(update, context, target_id)
+            await send_node_contents(
+                update,
+                context,
+                target_id
+            )
+
             return CHOOSING
 
-    # 🏠 start عادی
+    # =====================================================
+    # 🏠 START عادی
+    # بدون Deep Link
+    # =====================================================
+
+    # خروج از حالت دریافت نمره
+    context.user_data.pop(
+        "score_course_id",
+        None
+    )
+
+    context.user_data.pop(
+        "score_mode",
+        None
+    )
+
     context.user_data["current_node"] = "root"
-    set_report_page(context, "root")
-    
-    await send_start_page(update, context)
+
+    set_report_page(
+        context,
+        "root"
+    )
+
+    await send_start_page(
+        update,
+        context
+    )
+
     return CHOOSING
 
 # ========= پیام راهنما - /help =============
@@ -6504,6 +6729,7 @@ def build_application():
             CommandHandler("set_alarm", set_week_entry),
             CommandHandler("alarm", toggle_week_alarm),
             CommandHandler("get_alarm", get_week_alarm_entry),
+            CommandHandler("score", score_command),
         ],
         states={
             CHOOSING: [
@@ -6675,8 +6901,77 @@ def build_application():
             WAITING_CHAT_MESSAGE: [
                 CommandHandler("cancel", cancel),
                 MessageHandler(filters.ALL & (~filters.COMMAND), receive_chat_message),
-            ]
+            ],
+
+            # =====================================================
+            # SCORE SYSTEM
+            # =====================================================
+            
+            SCORE_ROOT: [
+            
+                CallbackQueryHandler(
+                    score_callback_handler,
+                    pattern=r"^score_"
+                ),
+            
+            ],
+            
+            
+            SCORE_WAITING_EXCEL: [
+            
+                CallbackQueryHandler(
+                    score_callback_handler,
+                    pattern=r"^score_"
+                ),
+            
+                MessageHandler(
+                    filters.Document.ALL,
+                    handle_score_excel_state
+                ),
+            
+                MessageHandler(
+                    filters.TEXT & (~filters.COMMAND),
+                    handle_score_excel_state
+                ),
+            
+            ],
+            
+            
+            SCORE_WAITING_DELETE: [
+            
+                CallbackQueryHandler(
+                    score_callback_handler,
+                    pattern=r"^score_"
+                ),
+            
+            ],
+            
+            
+            SCORE_WAITING_BACKUP: [
+            
+                CallbackQueryHandler(
+                    score_callback_handler,
+                    pattern=r"^score_"
+                ),
+            
+                MessageHandler(
+                    filters.Document.ALL,
+                    receive_score_backup
+                ),
+            
+            ],
+            
+            
+            SCORE_WAITING_NATIONAL_ID: [
+            
+                MessageHandler(
+                    filters.TEXT & (~filters.COMMAND),
+                    receive_national_id
+                ),
+            
+            ],
         },
+
         fallbacks=[
             CommandHandler("start", start),
             CommandHandler("change", handle_reply_change),
@@ -6742,6 +7037,30 @@ async def main():
             print("ℹ️ No HTML backup restored; local HTML state will be used/created")
     except Exception as e:
         print(f"⚠️ HTML startup restore failed: {e}")
+    
+    # =========================================================
+    # SCORE BACKUP RESTORE
+    # =========================================================
+    
+    try:
+    
+        restored_score = restore_scores_on_startup()
+    
+        if restored_score:
+            print(
+                "✅ Latest score.json restored from Telegram"
+            )
+        else:
+            print(
+                "ℹ️ No score backup restored; "
+                "local/new score.json will be used"
+            )
+    
+    except Exception as e:
+    
+        print(
+            f"⚠️ Score startup restore failed: {e}"
+        )
 
     tg_app = build_application()
     await tg_app.initialize()
