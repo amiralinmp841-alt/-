@@ -4,8 +4,9 @@ import uuid
 import asyncio
 from io import BytesIO
 from datetime import datetime
-
+import re
 import pandas as pd
+import logging
 
 from telegram import (
     Update,
@@ -739,108 +740,170 @@ async def score_callback_handler(
 
     return SCORE_ROOT
 
-
 # =========================================================
 # EXCEL HELPERS
 # =========================================================
 
-def normalize_column_name(name):
-
-    if name is None:
-        return ""
-
-    return (
-        str(name)
-        .strip()
-        .lower()
-        .replace(" ", "")
-        .replace("_", "")
-        .replace("-", "")
-        .replace("‌", "")
-    )
-
-
-def find_national_id_column(columns):
-
-    accepted = {
-        "کدملی",
-        "کدملی",
-        "کدملي",
-        "nationalid",
-        "nationalcode",
-        "nationalnumber",
-        "nid",
-        "national_id",
-    }
-
-    for col in columns:
-
-        normalized = normalize_column_name(col)
-
-        if normalized in accepted:
-            return col
-
-    return None
-
-
-def find_score_column(columns):
-
-    accepted = {
-        "نمره",
-        "نمرهامتحان",
-        "score",
-        "grade",
-        "mark",
-        "finalscore",
-    }
-
-    for col in columns:
-
-        normalized = normalize_column_name(col)
-
-        if normalized in accepted:
-            return col
-
-    return None
-
-
 def normalize_national_id(value):
     """
-    تبدیل کد ملی به رشته استاندارد.
-    """
+    پیدا کردن و استانداردسازی کد ملی.
 
+    کد ملی باید دقیقاً 10 رقم باشد.
+    اگر داخل مقدار متن دیگری هم وجود داشته باشد،
+    سعی می‌کنیم عدد 10 رقمی را از آن استخراج کنیم.
+    """
     if pd.isna(value):
         return None
 
     value = str(value).strip()
 
-    # مثلا 1234567890.0
+    # تبدیل اعداد فارسی و عربی به انگلیسی
+    value = value.translate(
+        str.maketrans(
+            "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+            "01234567890123456789"
+        )
+    )
+
+    # حذف .0 احتمالی اکسل
     if value.endswith(".0"):
         value = value[:-2]
 
-    value = (
+    # حذف فاصله و خط تیره
+    cleaned = (
         value
         .replace(" ", "")
         .replace("-", "")
+        .replace("_", "")
     )
 
-    if not value:
+    # پیدا کردن عدد دقیقاً 10 رقمی
+    match = re.search(
+        r"(?<!\d)(\d{10})(?!\d)",
+        cleaned
+    )
+
+    if not match:
         return None
 
-    return value
+    national_id = match.group(1)
+
+    # کد ملی معتبر باید دقیقاً 10 رقم باشد
+    if len(national_id) != 10:
+        return None
+
+    return national_id
 
 
 def normalize_score(value):
-
+    """
+    تبدیل نمره به مقدار استاندارد.
+    """
     if pd.isna(value):
         return None
 
     value = str(value).strip()
 
+    # تبدیل اعداد فارسی و عربی به انگلیسی
+    value = value.translate(
+        str.maketrans(
+            "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+            "01234567890123456789"
+        )
+    )
+
     if not value:
         return None
 
-    return value
+    # حذف فاصله‌های اضافی
+    value = value.replace(" ", "")
+
+    # اگر اکسل عدد را مثلاً 15.0 خوانده باشد
+    if value.endswith(".0"):
+        value = value[:-2]
+
+    try:
+        score_number = float(value)
+
+        # جلوگیری از اینکه هر عددی به عنوان نمره شناخته شود
+        # محدوده نمره 0 تا 20
+        if 0 <= score_number <= 20:
+
+            # اگر عدد صحیح بود
+            if score_number.is_integer():
+                return str(int(score_number))
+
+            return str(score_number)
+
+    except (ValueError, TypeError):
+        pass
+
+    return None
+
+
+def extract_scores_from_dataframe(df):
+    """
+    استخراج هوشمند کد ملی و نمره از فایل Excel.
+
+    منطق:
+    1. در هر ردیف دنبال یک عدد 10 رقمی می‌گردیم.
+    2. وقتی کد ملی پیدا شد، ستون‌های بعد از آن بررسی می‌شوند.
+    3. اولین مقدار معتبر بین 0 تا 20 به عنوان نمره در نظر گرفته می‌شود.
+
+    بنابراین نیازی به نام ستون «کد ملی» یا «نمره» نیست.
+    """
+    scores = {}
+
+    # بدون وابستگی به عنوان ستون‌ها
+    for _, row in df.iterrows():
+
+        row_values = list(row.values)
+
+        national_id = None
+        national_id_index = None
+
+        # ---------------------------------------------
+        # پیدا کردن کد ملی در هر جای ردیف
+        # ---------------------------------------------
+
+        for index, value in enumerate(row_values):
+
+            found_national_id = normalize_national_id(
+                value
+            )
+
+            if found_national_id:
+                national_id = found_national_id
+                national_id_index = index
+                break
+
+        # اگر کد ملی پیدا نشد
+        if not national_id:
+            continue
+
+        score = None
+
+        # ---------------------------------------------
+        # پیدا کردن اولین نمره بعد از کد ملی
+        # ---------------------------------------------
+
+        for value in row_values[national_id_index + 1:]:
+
+            found_score = normalize_score(
+                value
+            )
+
+            if found_score is not None:
+                score = found_score
+                break
+
+        # اگر نمره پیدا نشد
+        if score is None:
+            continue
+
+        scores[national_id] = score
+
+    return scores
 
 
 # =========================================================
@@ -854,11 +917,9 @@ async def receive_score_excel(
     document = update.message.document
 
     if not document:
-
         await update.message.reply_text(
             "❌ لطفاً فایل Excel ارسال کنید."
         )
-
         return SCORE_WAITING_EXCEL
 
     filename = (
@@ -870,15 +931,16 @@ async def receive_score_excel(
         filename.endswith(".xlsx")
         or filename.endswith(".xls")
     ):
-
         await update.message.reply_text(
             "❌ فقط فایل Excel با فرمت "
             ".xlsx یا .xls قابل قبول است."
         )
-
         return SCORE_WAITING_EXCEL
 
     try:
+        await update.message.reply_text(
+            "⏳ در حال بررسی و استخراج نمرات از فایل..."
+        )
 
         file = await document.get_file()
 
@@ -886,75 +948,41 @@ async def receive_score_excel(
 
         excel_file = BytesIO(file_bytes)
 
+        # ---------------------------------------------
+        # فایل را بدون وابستگی به Header بخوان
+        # ---------------------------------------------
+
         df = pd.read_excel(
             excel_file,
-            dtype=str
+            header=None,
+            dtype=object
         )
 
         if df.empty:
-
             await update.message.reply_text(
                 "❌ فایل اکسل خالی است."
             )
-
             return SCORE_WAITING_EXCEL
 
-        national_id_column = find_national_id_column(
-            df.columns
-        )
+        # ---------------------------------------------
+        # استخراج هوشمند نمرات
+        # ---------------------------------------------
 
-        score_column = find_score_column(
-            df.columns
-        )
-
-        if not national_id_column:
-
-            await update.message.reply_text(
-                "❌ ستون کد ملی پیدا نشد.\n\n"
-                "نام ستون باید چیزی شبیه "
-                "«کد ملی» یا «national id» باشد."
-            )
-
-            return SCORE_WAITING_EXCEL
-
-        if not score_column:
-
-            await update.message.reply_text(
-                "❌ ستون نمره پیدا نشد.\n\n"
-                "نام ستون باید چیزی شبیه "
-                "«نمره» یا «score» باشد."
-            )
-
-            return SCORE_WAITING_EXCEL
-
-        scores = {}
-
-        for _, row in df.iterrows():
-
-            national_id = normalize_national_id(
-                row[national_id_column]
-            )
-
-            score = normalize_score(
-                row[score_column]
-            )
-
-            if not national_id:
-                continue
-
-            if score is None:
-                continue
-
-            scores[national_id] = score
+        scores = extract_scores_from_dataframe(df)
 
         if not scores:
-
             await update.message.reply_text(
                 "❌ هیچ کد ملی و نمره معتبری "
-                "در فایل پیدا نشد."
+                "در فایل پیدا نشد.\n\n"
+                "ربات به صورت خودکار دنبال "
+                "یک عدد ۱۰ رقمی به عنوان کد ملی "
+                "و اولین نمره بعد از آن می‌گردد."
             )
-
             return SCORE_WAITING_EXCEL
+
+        # ---------------------------------------------
+        # ذخیره موقت تا گرفتن نام درس
+        # ---------------------------------------------
 
         context.user_data["score_pending_excel"] = {
             "scores": scores,
@@ -962,32 +990,27 @@ async def receive_score_excel(
         }
 
         await update.message.reply_text(
-            "✅ فایل اکسل خوانده شد.\n\n"
-            f"👥 تعداد رکوردهای معتبر: "
+            "✅ فایل اکسل با موفقیت خوانده شد.\n\n"
+            f"👥 تعداد کد ملی و نمره پیدا شده: "
             f"<b>{len(scores)}</b>\n\n"
-            "حالا نام درس یا آزمون را ارسال کنید:",
+            "📚 حالا نام درس یا آزمون را ارسال کنید:",
             parse_mode="HTML"
         )
 
-        context.user_data["score_mode"] = (
-            "waiting_course_name"
-        )
+        context.user_data["score_mode"] = "waiting_course_name"
 
         return SCORE_WAITING_EXCEL
 
     except Exception as e:
-
-        print(
-            f"❌ Excel read error: {e}"
-        )
+        logging.exception("Excel read error")
 
         await update.message.reply_text(
-            f"❌ خطا در خواندن فایل اکسل:\n<code>{e}</code>",
+            "❌ هنگام خواندن فایل اکسل خطایی رخ داد.\n\n"
+            f"<code>{e}</code>",
             parse_mode="HTML"
         )
 
         return SCORE_WAITING_EXCEL
-
 
 # =========================================================
 # RECEIVE COURSE NAME
