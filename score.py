@@ -625,13 +625,15 @@ async def score_callback_handler(
             )
 
             token = course.get("token")
+            bot_username = context.bot.username or (await context.bot.get_me()).username
+            deep_link = f"https://t.me/{bot_username}?start=score_{token}"
 
             text += (
                 f"{number}. <b>{course_name}</b>\n"
                 f"👥 تعداد رکورد: "
                 f"<code>{student_count}</code>\n"
                 f"🔗 دیپ‌لینک:\n"
-                f"<code>score_{token}</code>\n\n"
+                f"<code>{deep_link}</code>\n\n"
             )
 
         await query.edit_message_text(
