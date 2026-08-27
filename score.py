@@ -685,6 +685,7 @@ async def score_callback_handler(
 
         return SCORE_ROOT
 
+
     # -----------------------------------------------------
     # دریافت بکاپ
     # -----------------------------------------------------
@@ -692,25 +693,21 @@ async def score_callback_handler(
     if action == "score_get_backup":
 
         if not os.path.exists(SCORE_FILE):
-
             save_scores(
                 get_empty_score_data(),
                 upload=False
             )
 
-        await query.message.reply_document(
-            document=InputFile(
-                SCORE_FILE,
-                filename="score.json"
-            ),
-            caption="📥 بکاپ فعلی score.json"
-        )
+        with open(SCORE_FILE, "rb") as f:
+            await query.message.reply_document(
+                document=f,
+                filename="score.json",
+                caption="📥 بکاپ فعلی score.json"
+            )
 
-        await query.answer(
-            "بکاپ ارسال شد."
-        )
-
+        await query.answer("بکاپ ارسال شد.")
         return SCORE_ROOT
+
 
     # -----------------------------------------------------
     # وارد کردن بکاپ
