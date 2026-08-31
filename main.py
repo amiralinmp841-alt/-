@@ -219,19 +219,27 @@ MASSAGE_GROUP_ID = int(os.getenv("MASSAGE_GROUP_ID", "0") or "0")
 # ============ TELETHON SEPARATE EVENT LOOP ============
 
 telethon_loop = asyncio.new_event_loop()
-telethon_client = None
-telethon_ready = threading.Event()
 
+telethon_client = None
+telethon_bot_client = None
+
+telethon_ready = threading.Event()
+telethon_bot_ready = threading.Event()
 
 def start_telethon_loop():
     """
-    Telethon client runs in a separate thread and separate event loop.
-    This prevents conflicts with bot async loop.
+    Telethon:
+    1) User client برای بکاپ‌ها
+    2) Bot client برای دانلود فایل‌های بزرگ ارسالی به Bot
     """
     global telethon_client
+    global telethon_bot_client
 
     asyncio.set_event_loop(telethon_loop)
 
+    # =========================
+    # USER TELETHON
+    # =========================
     telethon_client = TelegramClient(
         StringSession(TG_SESSION_STRING),
         TG_API_ID,
@@ -239,18 +247,36 @@ def start_telethon_loop():
         loop=telethon_loop
     )
 
+    # =========================
+    # BOT TELETHON
+    # =========================
+    telethon_bot_client = TelegramClient(
+        StringSession(),
+        TG_API_ID,
+        TG_API_HASH,
+        loop=telethon_loop
+    )
+
     async def init_client():
+        global telethon_client
+        global telethon_bot_client
+
+        # User account
         await telethon_client.start()
+
         print("✅ Telethon User API client started")
         telethon_ready.set()
 
+        # Bot account
+        await telethon_bot_client.start(
+            bot_token=TOKEN
+        )
+
+        print("✅ Telethon Bot API client started")
+        telethon_bot_ready.set()
+
     telethon_loop.run_until_complete(init_client())
     telethon_loop.run_forever()
-
-
-telethon_thread = threading.Thread(target=start_telethon_loop, daemon=True)
-telethon_thread.start()
-
 
 def run_telethon(coro):
     """
@@ -265,44 +291,100 @@ def run_telethon(coro):
     future = asyncio.run_coroutine_threadsafe(coro, telethon_loop)
     return future.result(timeout=120)
 
-async def _telethon_download_message_media(chat_id, message_id, save_path):
+async def _telethon_bot_download_message_media(
+    chat_id,
+    message_id,
+    save_path
+):
     try:
-        message = await telethon_client.get_messages(
+        if not telethon_bot_client:
+            print("❌ Telethon Bot client is not initialized")
+            return False
+
+        message = await telethon_bot_client.get_messages(
             chat_id,
             ids=message_id
         )
 
         if not message:
-            print(f"❌ Message {message_id} not found")
+            print(
+                f"❌ Telethon Bot could not find message "
+                f"{message_id} in chat {chat_id}"
+            )
             return False
 
         if not message.media:
             print("❌ Message has no media")
             return False
 
-        await message.download_media(file=save_path)
+        print(
+            f"⬇️ Telethon Bot downloading message "
+            f"{message_id}..."
+        )
+
+        await message.download_media(
+            file=save_path
+        )
 
         if not os.path.exists(save_path):
-            print("❌ File was not downloaded")
+            print(
+                "❌ Telethon Bot download finished "
+                "but file does not exist"
+            )
             return False
 
-        print(f"✅ Telethon downloaded: {save_path}")
+        print(
+            f"✅ Large ZIP downloaded by Telethon: "
+            f"{save_path}"
+        )
+
         return True
 
     except Exception as e:
-        print(f"❌ Telethon download error: {e}")
+        print(
+            f"❌ Telethon Bot download error: "
+            f"{type(e).__name__}: {e}"
+        )
+        return False
+    
+def telethon_bot_download_message_media(
+    chat_id,
+    message_id,
+    save_path
+):
+    telethon_bot_ready.wait(timeout=30)
+
+    if not telethon_bot_ready.is_set():
+        print("❌ Telethon Bot client is not ready")
         return False
 
-
-def telethon_download_message_media(chat_id, message_id, save_path):
-    return run_telethon(
-        _telethon_download_message_media(
+    future = asyncio.run_coroutine_threadsafe(
+        _telethon_bot_download_message_media(
             chat_id,
             message_id,
             save_path
-        )
+        ),
+        telethon_loop
     )
 
+    try:
+        return future.result(timeout=600)
+    except Exception as e:
+        print(
+            f"❌ Telethon Bot future error: "
+            f"{type(e).__name__}: {e}"
+        )
+        return False
+#    
+#def telethon_download_message_media(chat_id, message_id, save_path):
+#    return run_telethon(
+#        _telethon_download_message_media(
+#            chat_id,
+#            message_id,
+#            save_path
+#        )
+#    )
+#
 # ============ TELEGRAM FILE BACKUP HELPERS ============
 
 async def _upload_file_to_telegram(chat_id, file_path, caption=None, parse_mode=None):
@@ -7063,6 +7145,7 @@ async def main():
         download_latest_file_from_telegram=download_latest_file_from_telegram,
         run_telethon=run_telethon,
         telethon_client=telethon_client,
+        telethon_bot_download=telethon_bot_download_message_media,
     )
 
     # HTML state: آخرین بکاپ موجود در گروه HTML BACKUP را برگردان
