@@ -40,6 +40,7 @@ from telegram.ext import (
 from aiohttp import web
 
 log = logging.getLogger(__name__)
+from main import telethon_download_message_media
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -50,7 +51,7 @@ HTML_BACKUP_CHAT_ID = int(os.getenv("HTML_BACKUP_CHAT_ID", "0") or "0")
 HTML_DB_FILE = os.getenv("HTML_DB_FILE", "/tmp/html_database.json")
 HTML_ROOT = Path(os.getenv("HTML_ROOT", "/tmp/html_zips"))
 HTML_BACKUP_FILE = os.getenv("HTML_BACKUP_FILE", "/tmp/html_backup.zip")
-HTML_MAX_ZIP_BYTES = int(os.getenv("HTML_MAX_ZIP_BYTES", str(50 * 1024 * 1024)))
+HTML_MAX_ZIP_BYTES = int(os.getenv("HTML_MAX_ZIP_BYTES", str(500 * 1024 * 1024)))
 HTML_PAGE_SIZE = 8
 HTML_LOG_MAX = 3000
 
@@ -161,7 +162,7 @@ def _safe_extract_zip(zip_path: Path, destination: Path):
                 raise ValueError("ZIP شامل symlink است و قابل قبول نیست.")
 
         # Keep an explicit decompression ceiling too.
-        if total_uncompressed > 250 * 1024 * 1024:
+        if total_uncompressed > 1000 * 1024 * 1024:
             raise ValueError("حجم استخراج‌شده ZIP بیش از حد مجاز است.")
 
         destination.mkdir(parents=True, exist_ok=True)
@@ -505,8 +506,27 @@ async def html_receive_zip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tmp_dir = Path(tempfile.mkdtemp(prefix="html_upload_"))
     tmp_zip = tmp_dir / _safe_filename(document.file_name or "upload.zip")
     try:
-        tg_file = await document.get_file()
-        await tg_file.download_to_drive(custom_path=str(tmp_zip))
+        file_size = document.file_size or 0
+        
+        if file_size > 20 * 1024 * 1024:
+            # فایل ZIP بزرگ‌تر از 20MB → Telethon
+            ok = telethon_download_message_media(
+                update.message.chat_id,
+                update.message.message_id,
+                str(tmp_zip)
+            )
+        
+            if not ok:
+                await update.message.reply_text(
+                    "❌ دانلود فایل ZIP با Telethon ناموفق بود."
+                )
+                return
+        else:
+            # فایل‌های تا 20MB → Bot API
+            tg_file = await document.get_file()
+            await tg_file.download_to_drive(
+                custom_path=str(tmp_zip)
+            )
         # Validate before asking for the name.
         _validate_and_prepare_zip(tmp_zip, 0)
         context.user_data["html_pending_zip"] = str(tmp_zip)
