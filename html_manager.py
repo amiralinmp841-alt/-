@@ -64,7 +64,7 @@ _upload_file_to_telegram = None
 _download_latest_file_from_telegram = None
 _run_telethon = None
 _telethon_client = None
-
+_telethon_bot_download = None
 
 def configure_html_manager(
     *,
@@ -74,17 +74,25 @@ def configure_html_manager(
     download_latest_file_from_telegram,
     run_telethon=None,
     telethon_client=None,
+    telethon_bot_download=None,
 ):
     """Inject main.py dependencies without importing main.py."""
-    global ADMIN_IDS, _get_userdata, _upload_file_to_telegram
-    global _download_latest_file_from_telegram, _run_telethon, _telethon_client
-
+    global ADMIN_IDS
+    global _get_userdata
+    global _upload_file_to_telegram
+    global _download_latest_file_from_telegram
+    global _run_telethon
+    global _telethon_client
+    global _telethon_bot_download
+    
     ADMIN_IDS = {int(x) for x in (admin_ids or [])}
     _get_userdata = get_userdata
     _upload_file_to_telegram = upload_file_to_telegram
     _download_latest_file_from_telegram = download_latest_file_from_telegram
     _run_telethon = run_telethon
     _telethon_client = telethon_client
+    _telethon_bot_download = telethon_bot_download
+    
 
 
 # ---------------------------------------------------------------------------
@@ -827,18 +835,58 @@ async def html_receive_backup(update: Update, context: ContextTypes.DEFAULT_TYPE
     temp_dir = Path(tempfile.mkdtemp(prefix="html_backup_upload_"))
     uploaded = temp_dir / "html_backup.zip"
     try:
-        tg_file = await doc.get_file()
-        await tg_file.download_to_drive(custom_path=str(uploaded))
-        if not _restore_backup_archive(str(uploaded)):
-            raise ValueError("ساختار بکاپ معتبر نیست.")
-        # Keep exact latest imported backup as local backup source.
-        shutil.copy2(uploaded, HTML_BACKUP_FILE)
-        context.user_data.pop("html_waiting_backup", None)
-        backup_ok = _backup_and_log(update.effective_user, "جایگزینی فایل HTML BACKUP")
+        file_size = document.file_size or 0
+    
+        if file_size > 20 * 1024 * 1024:
+            # ==========================================
+            # LARGE ZIP → TELETHON BOT
+            # ==========================================
+    
+            await update.message.reply_text(
+                "⏳ حجم فایل بیشتر از ۲۰ مگابایت است.\n"
+                "در حال دریافت فایل با Telethon..."
+            )
+    
+            if _telethon_bot_download is None:
+                raise RuntimeError(
+                    "Telethon Bot downloader is not configured."
+                )
+    
+            ok = _telethon_bot_download(
+                update.message.chat_id,
+                update.message.message_id,
+                str(tmp_zip)
+            )
+    
+            if not ok:
+                raise RuntimeError(
+                    "دانلود فایل ZIP با Telethon انجام نشد."
+                )
+    
+        else:
+            # ==========================================
+            # NORMAL ZIP → BOT API
+            # ==========================================
+    
+            tg_file = await document.get_file()
+    
+            await tg_file.download_to_drive(
+                custom_path=str(tmp_zip)
+            )
+    
+        # Validate before asking for the name.
+        _validate_and_prepare_zip(tmp_zip, 0)
+    
+        context.user_data["html_pending_zip"] = str(tmp_zip)
+        context.user_data["html_pending_zip_tmp"] = str(tmp_dir)
+    
         await update.message.reply_text(
-            "✅ بکاپ HTML با موفقیت جایگزین شد.\n" + ("☁️ نسخه جدید در گروه بکاپ هم ثبت شد." if backup_ok else "⚠️ ارسال نسخه جدید به گروه بکاپ ناموفق بود."),
-            reply_markup=ReplyKeyboardRemove(),
+            "✅ زیپ دریافت و بررسی شد.\n\n"
+            "📚 اسم جزوه را بفرستید.\n"
+            "برای لغو، /cancel را بزنید."
         )
+    
+        return HTML_WAIT_NAME
     except Exception as e:
         await update.message.reply_text(f"❌ وارد کردن بکاپ ناموفق بود:\n{e}")
     finally:
