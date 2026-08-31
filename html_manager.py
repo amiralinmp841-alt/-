@@ -40,7 +40,6 @@ from telegram.ext import (
 from aiohttp import web
 
 log = logging.getLogger(__name__)
-from main import telethon_download_message_media
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -507,7 +506,8 @@ async def html_receive_zip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tmp_zip = tmp_dir / _safe_filename(document.file_name or "upload.zip")
     try:
         file_size = document.file_size or 0
-        
+        from main import telethon_download_message_media
+
         if file_size > 20 * 1024 * 1024:
             # فایل ZIP بزرگ‌تر از 20MB → Telethon
             ok = telethon_download_message_media(
