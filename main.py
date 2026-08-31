@@ -265,6 +265,43 @@ def run_telethon(coro):
     future = asyncio.run_coroutine_threadsafe(coro, telethon_loop)
     return future.result(timeout=120)
 
+async def _telethon_download_message_media(chat_id, message_id, save_path):
+    try:
+        message = await telethon_client.get_messages(
+            chat_id,
+            ids=message_id
+        )
+
+        if not message:
+            print(f"❌ Message {message_id} not found")
+            return False
+
+        if not message.media:
+            print("❌ Message has no media")
+            return False
+
+        await message.download_media(file=save_path)
+
+        if not os.path.exists(save_path):
+            print("❌ File was not downloaded")
+            return False
+
+        print(f"✅ Telethon downloaded: {save_path}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Telethon download error: {e}")
+        return False
+
+
+def telethon_download_message_media(chat_id, message_id, save_path):
+    return run_telethon(
+        _telethon_download_message_media(
+            chat_id,
+            message_id,
+            save_path
+        )
+    )
 
 # ============ TELEGRAM FILE BACKUP HELPERS ============
 
